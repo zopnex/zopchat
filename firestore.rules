@@ -1,0 +1,76 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function isSelf(uid) {
+      return signedIn() && request.auth.uid == uid;
+    }
+
+    function isChatMember(chatId) {
+      return signedIn()
+        && exists(/databases/$(database)/documents/chats/$(chatId))
+        && get(/databases/$(database)/documents/chats/$(chatId)).data.memberMap[request.auth.uid] == true;
+    }
+
+    match /users/{uid} {
+      allow read: if signedIn();
+      allow create, update: if isSelf(uid);
+      allow delete: if false;
+    }
+
+    // V1 demo rules. Production should reserve mobileNumbers writes for Cloud Functions
+    // to enforce strong uniqueness and prevent malicious claiming of numbers.
+    match /mobileNumbers/{mobile} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if signedIn() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
+    }
+
+    // V1 demo only. Production mobile/password login must move to a backend
+    // with password hashing, rate limiting, and custom auth token creation.
+    match /mobileLogin/{mobile} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.uid == request.auth.uid;
+      allow update: if signedIn() && resource.data.uid == request.auth.uid && request.resource.data.uid == request.auth.uid;
+      allow delete: if false;
+    }
+
+    match /chats/{chatId} {
+      allow read: if signedIn() && resource.data.memberMap[request.auth.uid] == true;
+      allow create: if signedIn() && request.resource.data.memberMap[request.auth.uid] == true;
+      allow update: if isChatMember(chatId);
+      allow delete: if false;
+
+      match /messages/{messageId} {
+        allow read: if isChatMember(chatId);
+        allow create: if isChatMember(chatId)
+          && request.resource.data.senderId == request.auth.uid
+          && request.resource.data.type in ["text", "image"]
+          && (
+            (request.resource.data.type == "text"
+              && request.resource.data.text is string
+              && request.resource.data.text.size() > 0)
+            || (request.resource.data.type == "image"
+              && request.resource.data.imageURL is string
+              && request.resource.data.imageURL.size() > 0)
+          );
+        allow update: if isChatMember(chatId)
+          && (
+            (request.resource.data.diff(resource.data).affectedKeys().hasOnly(["readBy", "status", "readAt"])
+              && request.resource.data.readBy[request.auth.uid] == true)
+            || (request.resource.data.diff(resource.data).affectedKeys().hasOnly(["hiddenFor"])
+              && request.resource.data.hiddenFor[request.auth.uid] == true)
+            || (resource.data.senderId == request.auth.uid
+              && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["deletedForEveryone", "text", "imageURL", "status", "deletedAt"])
+              && request.resource.data.deletedForEveryone == true)
+          );
+        allow delete: if false;
+      }
+    }
+  }
+}

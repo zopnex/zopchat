@@ -1,0 +1,347 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f9f7a" />
+    <title>ZopChat</title>
+    <link rel="preconnect" href="https://www.gstatic.com" />
+    <link rel="preconnect" href="https://api.cloudinary.com" />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <div id="app" class="app-shell" aria-live="polite">
+      <main class="screen is-active" id="loading-screen">
+        <div class="brand-mark">Z</div>
+        <h1>ZopChat</h1>
+        <div class="spinner" aria-label="Loading"></div>
+      </main>
+
+      <main class="screen auth-screen" id="login-screen" hidden>
+        <section class="auth-panel">
+          <div class="brand-lockup">
+            <div class="brand-mark">Z</div>
+            <div>
+              <h1>ZopChat</h1>
+              <p>Private, simple chats for your circle.</p>
+            </div>
+          </div>
+
+          <button class="primary-btn google-btn" id="google-login-btn" type="button">
+            <span class="google-dot">G</span>
+            Continue with Google
+          </button>
+
+          <div class="divider"><span>or</span></div>
+
+          <form class="form-stack" id="mobile-login-form" novalidate>
+            <label>
+              <span>Mobile number</span>
+              <input id="login-mobile" inputmode="tel" autocomplete="tel" placeholder="9876543210" />
+            </label>
+            <label>
+              <span>ZopChat password</span>
+              <input id="login-password" type="password" autocomplete="current-password" placeholder="Minimum 6 characters" />
+            </label>
+            <button class="secondary-btn" id="mobile-login-btn" type="submit">Login with mobile</button>
+          </form>
+        </section>
+      </main>
+
+      <main class="screen profile-screen" id="profile-screen" hidden>
+        <section class="profile-panel">
+          <div class="topline">
+            <div>
+              <p class="eyebrow">Profile setup</p>
+              <h2>Complete ZopChat</h2>
+            </div>
+            <button class="icon-btn" id="profile-logout-btn" title="Logout" type="button">×</button>
+          </div>
+
+          <form class="form-stack" id="profile-form" novalidate>
+            <div class="photo-picker">
+              <img id="profile-preview" alt="Profile preview" />
+              <label class="photo-action">
+                <input id="profile-photo-input" type="file" accept="image/*" />
+                Choose photo
+              </label>
+            </div>
+
+            <label>
+              <span>Name</span>
+              <input id="profile-name" autocomplete="name" placeholder="Your name" />
+            </label>
+            <label>
+              <span>Mobile number</span>
+              <input id="profile-mobile" inputmode="tel" autocomplete="tel" placeholder="9876543210" />
+            </label>
+            <label>
+              <span>ZopChat password</span>
+              <input id="profile-password" type="password" autocomplete="new-password" placeholder="Minimum 6 characters" />
+            </label>
+            <button class="primary-btn" id="save-profile-btn" type="submit">Continue</button>
+          </form>
+        </section>
+      </main>
+
+      <main class="screen home-screen" id="home-screen" hidden>
+        <header class="app-header">
+          <div class="header-brand">
+            <div class="brand-mark small">Z</div>
+            <h2>ZopChat</h2>
+          </div>
+          <div class="header-actions">
+            <button class="icon-btn" id="open-search-btn" title="Search user" type="button">⌕</button>
+            <button class="avatar-btn" id="open-profile-btn" title="Your profile" type="button">
+              <img id="home-avatar" alt="Your profile" />
+            </button>
+          </div>
+        </header>
+
+        <section class="chat-list-wrap">
+          <div class="section-title">
+            <h3>Recent chats</h3>
+            <button class="text-btn" id="start-chat-btn" type="button">Start New Chat</button>
+          </div>
+          <div class="chat-list" id="chat-list"></div>
+          <div class="empty-state" id="empty-chats" hidden>
+            <div class="empty-icon">⌕</div>
+            <p>No chats yet. Search a mobile number to start chatting.</p>
+            <button class="primary-btn compact" id="empty-start-chat-btn" type="button">Start New Chat</button>
+          </div>
+        </section>
+      </main>
+
+      <main class="screen search-screen" id="search-screen" hidden>
+        <header class="app-header">
+          <div class="header-brand">
+            <button class="icon-btn" id="close-search-btn" title="Back" type="button">‹</button>
+            <h2>New chat</h2>
+          </div>
+        </header>
+
+        <section class="search-page-wrap">
+          <form class="search-form page-search" id="search-form" novalidate>
+            <input id="search-mobile" inputmode="tel" autocomplete="tel" placeholder="Enter full mobile number" />
+            <button class="primary-btn compact" id="search-btn" type="submit">Search</button>
+          </form>
+          <div class="search-result" id="search-result"></div>
+          <div class="section-title search-list-title">
+            <h3>People you chatted with</h3>
+          </div>
+          <div class="chat-list" id="search-chat-list"></div>
+          <div class="empty-state" id="empty-search-chats" hidden>
+            <div class="empty-icon">⌕</div>
+            <p>No chatted users yet. Enter a full mobile number to start a new chat.</p>
+          </div>
+        </section>
+      </main>
+
+      <main class="screen settings-screen" id="settings-screen" hidden>
+        <header class="app-header">
+          <div class="header-brand">
+            <button class="icon-btn" id="settings-back-btn" title="Back" type="button">‹</button>
+            <h2>Settings</h2>
+          </div>
+        </header>
+
+        <section class="settings-wrap">
+          <div class="settings-profile">
+            <img id="settings-avatar" alt="Your profile" />
+            <label class="photo-action">
+              <input id="settings-photo-input" type="file" accept="image/*" />
+              Change photo
+            </label>
+            <h3 id="settings-name">Your name</h3>
+            <p id="settings-about">Hey there! I am using ZopChat.</p>
+          </div>
+
+          <div class="settings-card">
+            <div class="setting-row">
+              <div>
+                <span>Name</span>
+                <strong id="settings-name-value">-</strong>
+              </div>
+              <button class="text-btn" data-edit-field="name" type="button">Edit</button>
+            </div>
+            <form class="inline-edit" id="edit-name-form" hidden>
+              <input id="edit-name-input" placeholder="Your name" />
+              <button class="primary-btn compact" type="submit">Save</button>
+            </form>
+
+            <div class="setting-row">
+              <div>
+                <span>Description</span>
+                <strong id="settings-about-value">-</strong>
+              </div>
+              <button class="text-btn" data-edit-field="about" type="button">Edit</button>
+            </div>
+            <form class="inline-edit" id="edit-about-form" hidden>
+              <input id="edit-about-input" placeholder="About" />
+              <button class="primary-btn compact" type="submit">Save</button>
+            </form>
+
+            <div class="setting-row">
+              <div>
+                <span>Mobile number</span>
+                <strong id="settings-mobile-value">-</strong>
+              </div>
+              <button class="text-btn" data-edit-field="mobile" type="button">Update mobile number</button>
+            </div>
+            <form class="mobile-update" id="edit-mobile-form" hidden>
+              <input id="edit-mobile-input" inputmode="tel" placeholder="New mobile number" />
+              <input id="edit-mobile-password" type="password" placeholder="ZopChat password" />
+              <div class="inline-actions">
+                <button class="secondary-btn compact" id="send-email-verify-btn" type="button">Send email verification</button>
+                <button class="primary-btn compact" type="submit">Save number</button>
+              </div>
+              <p>Email verification must be complete before updating your mobile number.</p>
+            </form>
+          </div>
+
+          <div class="settings-card">
+            <button class="setting-link" id="privacy-btn" type="button">Privacy</button>
+            <form class="privacy-panel" id="privacy-form" hidden>
+              <label>
+                <span>Profile photo</span>
+                <select id="privacy-photo">
+                  <option value="everyone">Everyone</option>
+                  <option value="nobody">Nobody</option>
+                </select>
+              </label>
+              <label>
+                <span>Description</span>
+                <select id="privacy-about">
+                  <option value="everyone">Everyone</option>
+                  <option value="nobody">Nobody</option>
+                </select>
+              </label>
+              <label>
+                <span>Last seen</span>
+                <select id="privacy-last-seen">
+                  <option value="everyone">Everyone</option>
+                  <option value="nobody">Nobody</option>
+                </select>
+              </label>
+              <button class="primary-btn compact" type="submit">Save privacy</button>
+            </form>
+            <button class="setting-link" id="block-list-btn" type="button">Block list</button>
+            <button class="setting-link" id="notifications-btn" type="button">Notifications</button>
+            <button class="setting-link danger" id="settings-logout-btn" type="button">Log out</button>
+          </div>
+        </section>
+      </main>
+
+      <main class="screen chat-screen" id="chat-screen" hidden>
+        <header class="chat-header">
+          <button class="icon-btn" id="back-home-btn" title="Back" type="button">‹</button>
+          <button class="chat-person-btn" id="open-receiver-profile-btn" type="button">
+            <img id="receiver-avatar" alt="Receiver profile" />
+            <div>
+              <h3 id="receiver-name">Chat</h3>
+              <p id="receiver-status">Online</p>
+            </div>
+          </button>
+        </header>
+        <section class="messages" id="messages"></section>
+        <form class="message-composer" id="message-form" novalidate>
+          <div class="reply-preview" id="reply-preview" hidden>
+            <div>
+              <strong id="reply-title">Reply</strong>
+              <p id="reply-text"></p>
+            </div>
+            <button class="icon-btn mini" id="cancel-reply-btn" title="Cancel reply" type="button">×</button>
+          </div>
+          <label class="attach-btn" title="Send photo">
+            <input id="message-photo-input" type="file" accept="image/*" />
+            ＋
+          </label>
+          <input id="message-input" autocomplete="off" placeholder="Message" />
+          <button class="send-btn" id="send-message-btn" title="Send" type="submit">➤</button>
+        </form>
+      </main>
+
+      <main class="screen receiver-profile-screen" id="receiver-profile-screen" hidden>
+        <header class="app-header">
+          <div class="header-brand">
+            <button class="icon-btn" id="receiver-profile-back-btn" title="Back" type="button">‹</button>
+            <h2>Profile</h2>
+          </div>
+        </header>
+        <section class="receiver-profile-wrap">
+          <div class="receiver-hero">
+            <img id="full-user-avatar" alt="User profile" />
+            <h2 id="full-user-name">ZopChat User</h2>
+            <p id="full-user-about">Hey there! I am using ZopChat.</p>
+          </div>
+          <div class="settings-card">
+            <div class="setting-row">
+              <div>
+                <span>Mobile</span>
+                <strong id="full-user-mobile">-</strong>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <span>Email</span>
+                <strong id="full-user-email">-</strong>
+              </div>
+            </div>
+            <div class="setting-row">
+              <div>
+                <span>Status</span>
+                <strong id="full-user-status">-</strong>
+              </div>
+            </div>
+            <button class="setting-link danger" id="block-user-btn" type="button">Block user</button>
+          </div>
+        </section>
+      </main>
+    </div>
+
+    <div class="photo-viewer" id="photo-viewer" hidden>
+      <header>
+        <button class="icon-btn" id="close-photo-viewer-btn" title="Close" type="button">×</button>
+        <button class="primary-btn compact" id="save-viewer-photo-btn" type="button">Save</button>
+      </header>
+      <img id="viewer-photo" alt="Shared photo" />
+    </div>
+
+    <div class="action-sheet-backdrop" id="message-actions" hidden>
+      <section class="action-sheet">
+        <button id="action-reply-btn" type="button">Reply</button>
+        <button id="action-copy-btn" type="button">Copy</button>
+        <button id="action-forward-btn" type="button">Forward</button>
+        <div class="reaction-row">
+          <button data-reaction="👍" type="button">👍</button>
+          <button data-reaction="❤️" type="button">❤️</button>
+          <button data-reaction="😂" type="button">😂</button>
+          <button data-reaction="😮" type="button">😮</button>
+        </div>
+        <button id="action-delete-btn" class="danger" type="button">Delete</button>
+        <button id="action-cancel-btn" type="button">Cancel</button>
+      </section>
+    </div>
+
+    <div class="action-sheet-backdrop" id="forward-actions" hidden>
+      <section class="action-sheet forward-sheet">
+        <h3>Forward to</h3>
+        <div class="chat-list" id="forward-chat-list"></div>
+        <button id="forward-cancel-btn" type="button">Cancel</button>
+      </section>
+    </div>
+
+    <div class="action-sheet-backdrop" id="delete-actions" hidden>
+      <section class="action-sheet">
+        <button id="delete-for-me-btn" type="button">Delete for me</button>
+        <button id="delete-for-everyone-btn" class="danger" type="button">Delete for everyone</button>
+        <button id="delete-cancel-btn" type="button">Cancel</button>
+      </section>
+    </div>
+
+    <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+    <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
+    <script type="module" src="./app.js"></script>
+  </body>
+</html>
