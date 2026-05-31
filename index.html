@@ -126,6 +126,23 @@
             <button class="primary-btn compact" id="search-btn" type="submit">Search</button>
           </form>
           <div class="search-result" id="search-result"></div>
+          <button class="secondary-btn" id="open-create-group-btn" type="button">Create group</button>
+          <form class="settings-card create-group-form" id="create-group-form" hidden>
+            <input id="group-name-input" placeholder="Group name" />
+            <input id="group-description-input" placeholder="Group description" />
+            <div class="group-icon-picker">
+              <img id="group-photo-preview" alt="Group icon preview" />
+              <label class="photo-action">
+                <input id="group-photo-input" type="file" accept="image/*" />
+                Choose group icon
+              </label>
+            </div>
+            <label>
+              <span>Members</span>
+              <div class="member-picker" id="group-member-picker"></div>
+            </label>
+            <button class="primary-btn compact" type="submit">Create group</button>
+          </form>
           <div class="section-title search-list-title">
             <h3>People you chatted with</h3>
           </div>
@@ -226,6 +243,21 @@
               <button class="primary-btn compact" type="submit">Save privacy</button>
             </form>
             <button class="setting-link" id="block-list-btn" type="button">Block list</button>
+            <button class="setting-link" id="qr-btn" type="button">My QR code</button>
+            <div class="qr-card" id="qr-card" hidden>
+              <img id="profile-qr" alt="Profile QR code" />
+              <p>Share this QR to start a ZopChat chat.</p>
+            </div>
+            <button class="setting-link" id="wallpaper-btn" type="button">Chat wallpaper</button>
+            <form class="privacy-panel" id="wallpaper-form" hidden>
+              <select id="wallpaper-select">
+                <option value="default">Default</option>
+                <option value="mint">Mint</option>
+                <option value="pearl">Pearl</option>
+                <option value="sky">Sky</option>
+              </select>
+              <button class="primary-btn compact" type="submit">Save wallpaper</button>
+            </form>
             <button class="setting-link" id="notifications-btn" type="button">Notifications</button>
             <button class="setting-link danger" id="settings-logout-btn" type="button">Log out</button>
           </div>
@@ -253,7 +285,7 @@
             <button class="icon-btn mini" id="cancel-reply-btn" title="Cancel reply" type="button">×</button>
           </div>
           <label class="attach-btn" title="Send photo">
-            <input id="message-photo-input" type="file" accept="image/*" />
+            <input id="message-photo-input" type="file" accept="image/*" multiple />
             ＋
           </label>
           <input id="message-input" autocomplete="off" placeholder="Message" />
@@ -274,6 +306,25 @@
             <h2 id="full-user-name">ZopChat User</h2>
             <p id="full-user-about">Hey there! I am using ZopChat.</p>
           </div>
+          <form class="settings-card group-edit-card" id="group-edit-form" hidden>
+            <input id="edit-group-name" placeholder="Group name" />
+            <input id="edit-group-description" placeholder="Group description" />
+            <div class="group-icon-picker">
+              <img id="edit-group-photo-preview" alt="Group icon preview" />
+              <label class="photo-action">
+                <input id="edit-group-photo" type="file" accept="image/*" />
+                Change group icon
+              </label>
+            </div>
+            <label>
+              <span>Members visibility</span>
+              <select id="group-member-visibility">
+                <option value="everyone">Everyone can see members</option>
+                <option value="admins">Only admins can see members</option>
+              </select>
+            </label>
+            <button class="primary-btn compact" type="submit">Save group</button>
+          </form>
           <div class="settings-card">
             <div class="setting-row">
               <div>
@@ -295,6 +346,17 @@
             </div>
             <button class="setting-link danger" id="block-user-btn" type="button">Block user</button>
           </div>
+          <div class="settings-card" id="group-members-card" hidden>
+            <div class="setting-row"><div><span>Members</span><strong id="group-member-count">0</strong></div></div>
+            <div class="member-picker" id="group-add-member-picker"></div>
+            <div class="member-list" id="group-member-list"></div>
+            <button class="setting-link danger" id="leave-group-btn" type="button">Exit group</button>
+            <button class="setting-link danger" id="delete-group-btn" type="button">Delete group</button>
+          </div>
+          <div class="settings-card" id="media-gallery-card" hidden>
+            <div class="setting-row"><div><span>Media gallery</span><strong id="media-count">0 photos</strong></div></div>
+            <div class="media-gallery" id="media-gallery"></div>
+          </div>
         </section>
       </main>
     </div>
@@ -302,24 +364,31 @@
     <div class="photo-viewer" id="photo-viewer" hidden>
       <header>
         <button class="icon-btn" id="close-photo-viewer-btn" title="Close" type="button">×</button>
-        <button class="primary-btn compact" id="save-viewer-photo-btn" type="button">Save</button>
       </header>
-      <img id="viewer-photo" alt="Shared photo" />
+      <div class="photo-viewer-list" id="viewer-photo-list"></div>
     </div>
 
     <div class="action-sheet-backdrop" id="message-actions" hidden>
       <section class="action-sheet">
         <button id="action-reply-btn" type="button">Reply</button>
         <button id="action-copy-btn" type="button">Copy</button>
+        <button id="action-edit-btn" type="button">Edit</button>
         <button id="action-forward-btn" type="button">Forward</button>
+        <button id="action-delete-btn" class="danger" type="button">Delete</button>
+        <button id="action-cancel-btn" type="button">Cancel</button>
+      </section>
+    </div>
+
+    <div class="action-sheet-backdrop" id="reaction-actions" hidden>
+      <section class="action-sheet reaction-sheet">
         <div class="reaction-row">
           <button data-reaction="👍" type="button">👍</button>
           <button data-reaction="❤️" type="button">❤️</button>
           <button data-reaction="😂" type="button">😂</button>
           <button data-reaction="😮" type="button">😮</button>
+          <button data-reaction="🙏" type="button">🙏</button>
         </div>
-        <button id="action-delete-btn" class="danger" type="button">Delete</button>
-        <button id="action-cancel-btn" type="button">Cancel</button>
+        <button id="reaction-cancel-btn" type="button">Cancel</button>
       </section>
     </div>
 
