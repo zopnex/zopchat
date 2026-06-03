@@ -274,6 +274,7 @@
               <p id="receiver-status">Online</p>
             </div>
           </button>
+          <button class="icon-btn" id="chat-menu-btn" title="Chat menu" type="button">⋮</button>
         </header>
         <section class="messages" id="messages"></section>
         <form class="message-composer" id="message-form" novalidate>
@@ -284,9 +285,12 @@
             </div>
             <button class="icon-btn mini" id="cancel-reply-btn" title="Cancel reply" type="button">×</button>
           </div>
-          <label class="attach-btn" title="Send photo">
+          <button class="attach-btn" id="attach-menu-btn" title="Attach" type="button">＋</button>
+          <label class="hidden-file">
             <input id="message-photo-input" type="file" accept="image/*" multiple />
-            ＋
+          </label>
+          <label class="hidden-file">
+            <input id="message-file-input" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,*/*" multiple />
           </label>
           <input id="message-input" autocomplete="off" placeholder="Message" />
           <button class="send-btn" id="send-message-btn" title="Send" type="submit">➤</button>
@@ -376,6 +380,22 @@
         <button id="action-forward-btn" type="button">Forward</button>
         <button id="action-delete-btn" class="danger" type="button">Delete</button>
         <button id="action-cancel-btn" type="button">Cancel</button>
+      </section>
+    </div>
+
+    <div class="action-sheet-backdrop" id="chat-menu-actions" hidden>
+      <section class="action-sheet">
+        <button id="chat-menu-pin-btn" type="button">Pin chat</button>
+        <button id="chat-menu-profile-btn" type="button">View profile</button>
+        <button id="chat-menu-cancel-btn" type="button">Cancel</button>
+      </section>
+    </div>
+
+    <div class="action-sheet-backdrop" id="attach-actions" hidden>
+      <section class="action-sheet">
+        <button id="attach-image-btn" type="button">Image</button>
+        <button id="attach-file-btn" type="button">File / PDF</button>
+        <button id="attach-cancel-btn" type="button">Cancel</button>
       </section>
     </div>
 
