@@ -1,6 +1,6 @@
 # ZopChat V1
 
-ZopChat is a static, mobile-first one-to-one chat web app using Firebase Authentication, Firestore realtime listeners, and Cloudinary unsigned image uploads.
+ZopChat is a static, mobile-first one-to-one chat web app using Firebase Authentication, Firestore realtime listeners, and Cloudinary unsigned uploads for images and attachments.
 
 ## Files
 
@@ -16,7 +16,7 @@ ZopChat is a static, mobile-first one-to-one chat web app using Firebase Authent
 - WhatsApp-style recent chats with realtime latest chat ordering
 - Inline settings for name, description, photo, and mobile update
 - Receiver profile modal from chat header
-- Text and photo messages with received-photo download button
+- Text, photo, and file/PDF messages with download buttons
 
 ## Firebase Data Shape
 
@@ -38,7 +38,7 @@ chats/{chatId}/messages/{messageId}
 4. Add your local and hosting domains in Authentication > Settings > Authorized domains.
 5. Enable Firestore Database.
 6. Publish `firestore.rules` from this project.
-7. Make sure Cloudinary unsigned preset `ml_default` is enabled for cloud `dsnuatuc8`.
+7. Make sure Cloudinary unsigned preset `ml_default` is enabled for cloud `dsnuatuc8`, and allow non-image/raw files in that preset for PDF/file sharing.
 8. Open `index.html` through a local static server, GitHub Pages, or Firebase Hosting.
 
 For quick local testing:

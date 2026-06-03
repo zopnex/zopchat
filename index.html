@@ -91,7 +91,12 @@
             <h2>ZopChat</h2>
           </div>
           <div class="header-actions">
-            <button class="icon-btn" id="open-search-btn" title="Search user" type="button">⌕</button>
+            <button class="icon-btn qr-scan-btn" id="scan-qr-btn" title="Scan QR code" type="button" aria-label="Scan QR code">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z" />
+                <path d="M14 14h3v3h-3zM17 17h3v3h-3zM14 20h3" />
+              </svg>
+            </button>
             <button class="avatar-btn" id="open-profile-btn" title="Your profile" type="button">
               <img id="home-avatar" alt="Your profile" />
             </button>
@@ -101,7 +106,6 @@
         <section class="chat-list-wrap">
           <div class="section-title">
             <h3>Recent chats</h3>
-            <button class="text-btn" id="start-chat-btn" type="button">Start New Chat</button>
           </div>
           <div class="chat-list" id="chat-list"></div>
           <div class="empty-state" id="empty-chats" hidden>
@@ -110,6 +114,7 @@
             <button class="primary-btn compact" id="empty-start-chat-btn" type="button">Start New Chat</button>
           </div>
         </section>
+        <button class="new-chat-fab" id="start-chat-btn" title="New chat" type="button" aria-label="New chat">+</button>
       </main>
 
       <main class="screen search-screen" id="search-screen" hidden>
@@ -121,12 +126,14 @@
         </header>
 
         <section class="search-page-wrap">
-          <form class="search-form page-search" id="search-form" novalidate>
-            <input id="search-mobile" inputmode="tel" autocomplete="tel" placeholder="Enter full mobile number" />
-            <button class="primary-btn compact" id="search-btn" type="submit">Search</button>
-          </form>
+          <div class="new-chat-panel">
+            <form class="search-form page-search" id="search-form" novalidate>
+              <input id="search-mobile" inputmode="tel" autocomplete="tel" placeholder="Enter full mobile number" />
+              <button class="primary-btn compact" id="search-btn" type="submit">Search</button>
+            </form>
+            <button class="secondary-btn compact" id="open-create-group-btn" type="button">Create group</button>
+          </div>
           <div class="search-result" id="search-result"></div>
-          <button class="secondary-btn" id="open-create-group-btn" type="button">Create group</button>
           <form class="settings-card create-group-form" id="create-group-form" hidden>
             <input id="group-name-input" placeholder="Group name" />
             <input id="group-description-input" placeholder="Group description" />
@@ -144,7 +151,7 @@
             <button class="primary-btn compact" type="submit">Create group</button>
           </form>
           <div class="section-title search-list-title">
-            <h3>People you chatted with</h3>
+            <h3>Recent people</h3>
           </div>
           <div class="chat-list" id="search-chat-list"></div>
           <div class="empty-state" id="empty-search-chats" hidden>
@@ -259,6 +266,7 @@
               <button class="primary-btn compact" type="submit">Save wallpaper</button>
             </form>
             <button class="setting-link" id="notifications-btn" type="button">Notifications</button>
+            <button class="setting-link" id="share-app-btn" type="button">Share ZopChat</button>
             <button class="setting-link danger" id="settings-logout-btn" type="button">Log out</button>
           </div>
         </section>
@@ -367,9 +375,62 @@
 
     <div class="photo-viewer" id="photo-viewer" hidden>
       <header>
+        <h3 id="photo-viewer-title">Photo</h3>
         <button class="icon-btn" id="close-photo-viewer-btn" title="Close" type="button">×</button>
       </header>
       <div class="photo-viewer-list" id="viewer-photo-list"></div>
+    </div>
+
+    <div class="profile-preview-backdrop" id="profile-preview-pop" hidden>
+      <section class="profile-preview-card">
+        <button class="profile-preview-photo" id="profile-preview-photo-btn" type="button">
+          <span id="profile-preview-name">Profile</span>
+          <img id="profile-preview-photo" alt="Profile photo" />
+        </button>
+        <div class="profile-preview-actions">
+          <button id="profile-preview-chat-btn" type="button" title="Chat" aria-label="Chat">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5.5A3.5 3.5 0 0 1 7.5 2h9A3.5 3.5 0 0 1 20 5.5v6A3.5 3.5 0 0 1 16.5 15H10l-5 4v-4.6A3.5 3.5 0 0 1 4 11.5z" /></svg>
+          </button>
+          <button id="profile-preview-info-btn" type="button" title="Info" aria-label="Info">
+            <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9" /><path d="M12 10v6M12 7.5h.01" /></svg>
+          </button>
+        </div>
+      </section>
+    </div>
+
+    <div class="photo-cropper-backdrop" id="photo-cropper" hidden>
+      <section class="photo-cropper-panel">
+        <header>
+          <h3>Adjust photo</h3>
+          <button class="icon-btn" id="crop-cancel-btn" title="Cancel" type="button">×</button>
+        </header>
+        <div class="crop-stage" id="crop-stage">
+          <img id="crop-image" alt="Selected profile photo" />
+          <div class="crop-mask" aria-hidden="true"></div>
+        </div>
+        <label class="crop-zoom">
+          <span>Zoom</span>
+          <input id="crop-zoom" type="range" min="1" max="3" step="0.01" value="1" />
+        </label>
+        <div class="crop-actions">
+          <button class="secondary-btn compact" id="crop-reset-btn" type="button">Reset</button>
+          <button class="primary-btn compact" id="crop-done-btn" type="button">Done</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="qr-scanner-backdrop" id="qr-scanner" hidden>
+      <section class="qr-scanner-panel">
+        <header>
+          <h3>Scan QR</h3>
+          <button class="icon-btn" id="close-qr-scanner-btn" title="Close" type="button">×</button>
+        </header>
+        <div class="qr-video-wrap">
+          <video id="qr-scan-video" playsinline muted></video>
+          <div class="qr-frame" aria-hidden="true"></div>
+        </div>
+        <p id="qr-scan-status">Point the camera at a ZopChat QR code.</p>
+      </section>
     </div>
 
     <div class="action-sheet-backdrop" id="message-actions" hidden>

@@ -44,14 +44,15 @@ const firebaseConfig = {
   measurementId: "G-K71N2GRTX3",
 };
 
-// Cloudinary unsigned upload config for profile photos.
+// Cloudinary unsigned upload config. Photos stay on image/upload; attachments use auto/upload.
 const CLOUDINARY_API = "https://api.cloudinary.com/v1_1/dsnuatuc8/image/upload";
+const CLOUDINARY_FILE_API = "https://api.cloudinary.com/v1_1/dsnuatuc8/auto/upload";
 const CLOUDINARY_UPLOAD_PRESET = "ml_default";
 
 const DEFAULT_AVATAR =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Crect width='160' height='160' rx='80' fill='%23d9f8ec'/%3E%3Ccircle cx='80' cy='62' r='30' fill='%230f9f7a'/%3E%3Cpath d='M32 142c8-30 27-46 48-46s40 16 48 46' fill='%230f9f7a'/%3E%3C/svg%3E";
 const INVITE_AVATAR = "https://res.cloudinary.com/dsnuatuc8/image/upload/v1780190715/Screenshot_2026-05-31_065148_fohvc2.png";
-const ZOPCHAT_DEMO_DOWNLOAD_URL = "https://example.com/download-zopchat";
+const ZOPCHAT_DEMO_DOWNLOAD_URL = new URL("admi.html", window.location.href).href;
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -62,6 +63,19 @@ const state = {
   currentUser: null,
   currentProfile: null,
   selectedPhotoFile: null,
+  cropTarget: null,
+  cropFile: null,
+  cropObjectUrl: "",
+  cropImage: null,
+  cropScale: 1,
+  cropBaseScale: 1,
+  cropX: 0,
+  cropY: 0,
+  cropStartX: 0,
+  cropStartY: 0,
+  cropPointerX: 0,
+  cropPointerY: 0,
+  cropDragging: false,
   activeChatId: null,
   activeReceiver: null,
   activeChatMeta: null,
@@ -72,10 +86,18 @@ const state = {
   replyTo: null,
   viewerPhotoUrl: "",
   viewerPhotoUrls: [],
+  profilePreview: null,
   editingMessageId: null,
   activeChatData: null,
   typingTimer: null,
   uploadProgressId: null,
+  qrScanStream: null,
+  qrScanFrame: null,
+  qrDetector: null,
+  touchStartX: 0,
+  touchStartY: 0,
+  touchMoved: false,
+  suppressClickUntil: 0,
   chats: [],
   searchTimer: null,
   unsubChats: null,
@@ -127,6 +149,7 @@ const els = {
   editMobilePassword: $("edit-mobile-password"),
   sendEmailVerifyBtn: $("send-email-verify-btn"),
   settingsLogoutBtn: $("settings-logout-btn"),
+  shareAppBtn: $("share-app-btn"),
   privacyBtn: $("privacy-btn"),
   privacyForm: $("privacy-form"),
   privacyPhoto: $("privacy-photo"),
@@ -142,7 +165,11 @@ const els = {
   notificationsBtn: $("notifications-btn"),
   chatList: $("chat-list"),
   emptyChats: $("empty-chats"),
-  openSearchBtn: $("open-search-btn"),
+  scanQrBtn: $("scan-qr-btn"),
+  qrScanner: $("qr-scanner"),
+  closeQrScannerBtn: $("close-qr-scanner-btn"),
+  qrScanVideo: $("qr-scan-video"),
+  qrScanStatus: $("qr-scan-status"),
   startChatBtn: $("start-chat-btn"),
   emptyStartChatBtn: $("empty-start-chat-btn"),
   openCreateGroupBtn: $("open-create-group-btn"),
@@ -201,8 +228,22 @@ const els = {
   replyText: $("reply-text"),
   cancelReplyBtn: $("cancel-reply-btn"),
   photoViewer: $("photo-viewer"),
+  photoViewerTitle: $("photo-viewer-title"),
   viewerPhotoList: $("viewer-photo-list"),
   closePhotoViewerBtn: $("close-photo-viewer-btn"),
+  profilePreviewPop: $("profile-preview-pop"),
+  profilePreviewName: $("profile-preview-name"),
+  profilePreviewPhoto: $("profile-preview-photo"),
+  profilePreviewPhotoBtn: $("profile-preview-photo-btn"),
+  profilePreviewChatBtn: $("profile-preview-chat-btn"),
+  profilePreviewInfoBtn: $("profile-preview-info-btn"),
+  photoCropper: $("photo-cropper"),
+  cropStage: $("crop-stage"),
+  cropImage: $("crop-image"),
+  cropZoom: $("crop-zoom"),
+  cropDoneBtn: $("crop-done-btn"),
+  cropCancelBtn: $("crop-cancel-btn"),
+  cropResetBtn: $("crop-reset-btn"),
   messageActions: $("message-actions"),
   actionReplyBtn: $("action-reply-btn"),
   actionCopyBtn: $("action-copy-btn"),
@@ -543,17 +584,134 @@ async function uploadImageToCloudinary(file) {
 }
 
 async function uploadFileToCloudinary(file) {
+  if (!file) return null;
+
   const formData = new FormData();
   formData.append("file", file);
   formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-  const response = await fetch(CLOUDINARY_API.replace("/image/upload", "/raw/upload"), {
+
+  const response = await fetch(CLOUDINARY_FILE_API, {
     method: "POST",
     body: formData,
   });
-  if (!response.ok) throw new Error("File upload failed.");
+
   const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data?.error?.message || "File upload failed.");
+  }
   if (!data.secure_url) throw new Error("Cloudinary did not return a file URL.");
   return data.secure_url;
+}
+
+function cloudinaryAttachmentUrl(url) {
+  if (!url || !url.includes("/upload/")) return url;
+  if (url.includes("/upload/fl_attachment/")) return url;
+  return url.replace("/upload/", "/upload/fl_attachment/");
+}
+
+function resetCropPosition() {
+  state.cropScale = state.cropBaseScale;
+  state.cropX = 0;
+  state.cropY = 0;
+  if (els.cropZoom) els.cropZoom.value = "1";
+  renderCropImage();
+}
+
+function clampCropPosition() {
+  if (!state.cropImage || !els.cropStage) return;
+  const stageSize = els.cropStage.clientWidth;
+  const width = state.cropImage.naturalWidth * state.cropScale;
+  const height = state.cropImage.naturalHeight * state.cropScale;
+  const maxX = Math.max(0, (width - stageSize) / 2);
+  const maxY = Math.max(0, (height - stageSize) / 2);
+  state.cropX = Math.max(-maxX, Math.min(maxX, state.cropX));
+  state.cropY = Math.max(-maxY, Math.min(maxY, state.cropY));
+}
+
+function renderCropImage() {
+  if (!state.cropImage || !els.cropImage) return;
+  clampCropPosition();
+  els.cropImage.style.width = `${state.cropImage.naturalWidth * state.cropScale}px`;
+  els.cropImage.style.height = `${state.cropImage.naturalHeight * state.cropScale}px`;
+  els.cropImage.style.transform = `translate(calc(-50% + ${state.cropX}px), calc(-50% + ${state.cropY}px))`;
+}
+
+function openPhotoCropper(file, target) {
+  if (!file) return;
+  if (!file.type.startsWith("image/")) {
+    showToast("Choose a valid image file.", "error");
+    return;
+  }
+
+  if (state.cropObjectUrl) URL.revokeObjectURL(state.cropObjectUrl);
+  state.cropTarget = target;
+  state.cropFile = file;
+  state.cropObjectUrl = URL.createObjectURL(file);
+  state.cropImage = null;
+  state.cropX = 0;
+  state.cropY = 0;
+  els.cropZoom.value = "1";
+  els.cropImage.src = state.cropObjectUrl;
+  els.photoCropper.hidden = false;
+}
+
+function closePhotoCropper() {
+  els.photoCropper.hidden = true;
+  els.cropImage.removeAttribute("src");
+  if (state.cropObjectUrl) URL.revokeObjectURL(state.cropObjectUrl);
+  state.cropObjectUrl = "";
+  state.cropTarget = null;
+  state.cropFile = null;
+  state.cropImage = null;
+  state.cropDragging = false;
+}
+
+async function createCroppedProfileFile() {
+  if (!state.cropImage || !els.cropStage || !state.cropFile) return null;
+  const outputSize = 640;
+  const stageSize = els.cropStage.clientWidth;
+  const canvas = document.createElement("canvas");
+  canvas.width = outputSize;
+  canvas.height = outputSize;
+  const context = canvas.getContext("2d");
+  context.fillStyle = "#ffffff";
+  context.fillRect(0, 0, outputSize, outputSize);
+
+  const drawnWidth = state.cropImage.naturalWidth * state.cropScale;
+  const drawnHeight = state.cropImage.naturalHeight * state.cropScale;
+  const sourceScale = outputSize / stageSize;
+  const drawX = (stageSize / 2 - drawnWidth / 2 + state.cropX) * sourceScale;
+  const drawY = (stageSize / 2 - drawnHeight / 2 + state.cropY) * sourceScale;
+  context.drawImage(state.cropImage, drawX, drawY, drawnWidth * sourceScale, drawnHeight * sourceScale);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, "image/jpeg", 0.9));
+  if (!blob) throw new Error("Could not crop this photo.");
+  const baseName = (state.cropFile.name || "profile-photo").replace(/\.[^.]+$/, "");
+  return new File([blob], `${baseName}-zopchat.jpg`, { type: "image/jpeg" });
+}
+
+async function finishPhotoCrop() {
+  try {
+    const croppedFile = await createCroppedProfileFile();
+    if (!croppedFile) return;
+    const previewUrl = URL.createObjectURL(croppedFile);
+
+    if (state.cropTarget === "setup") {
+      state.selectedPhotoFile = croppedFile;
+      els.profilePreview.src = previewUrl;
+      closePhotoCropper();
+      return;
+    }
+
+    if (state.cropTarget === "settings") {
+      closePhotoCropper();
+      await updateSettingsPhoto(croppedFile);
+      URL.revokeObjectURL(previewUrl);
+    }
+  } catch (error) {
+    console.error(error);
+    showToast(error.message || "Could not crop this photo.", "error");
+  }
 }
 
 async function handleProfileSave(event) {
@@ -749,17 +907,34 @@ function renderChatList(chats) {
     button.className = "chat-item";
     button.type = "button";
     button.innerHTML = `
-      <img src="${escapeHtml(avatar)}" alt="${escapeHtml(title)}" />
+      <img class="chat-avatar" src="${escapeHtml(avatar)}" alt="${escapeHtml(title)}" data-chat-avatar="true" />
       <div class="chat-meta">
         <h4>${state.currentProfile?.pinnedChats?.[chat.id] ? "📌 " : ""}${escapeHtml(title)}</h4>
         <p>${escapeHtml(chat.lastMessage || "Start chatting")}</p>
       </div>
       <div class="chat-side">
         <p>${escapeHtml(formatTime(chat.lastMessageAt))}</p>
+        <button class="pin-btn" type="button" data-pin-chat="${escapeHtml(chat.id)}">${state.currentProfile?.pinnedChats?.[chat.id] ? "Unpin" : "Pin"}</button>
       </div>
     `;
     button.addEventListener("click", (event) => {
+      if (event.target.closest("[data-pin-chat]")) return;
+      if (event.target.closest("[data-chat-avatar]")) return;
       openChat(chat.id, chat.other, chat);
+    });
+    button.querySelector("[data-chat-avatar]")?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openProfilePreview({
+        title,
+        photoURL: avatar,
+        chatId: chat.id,
+        profile: chat.other,
+        chat,
+      });
+    });
+    button.querySelector("[data-pin-chat]").addEventListener("click", (event) => {
+      event.stopPropagation();
+      togglePinChat(chat.id);
     });
     els.chatList.appendChild(button);
   });
@@ -783,7 +958,7 @@ function renderSearchChatList() {
     button.className = "chat-item";
     button.type = "button";
     button.innerHTML = `
-      <img src="${escapeHtml(chat.other?.photoURL || DEFAULT_AVATAR)}" alt="${escapeHtml(chat.other?.name || "User")}" />
+      <img class="chat-avatar" src="${escapeHtml(chat.other?.photoURL || DEFAULT_AVATAR)}" alt="${escapeHtml(chat.other?.name || "User")}" data-chat-avatar="true" />
       <div class="chat-meta">
         <h4>${escapeHtml(chat.other?.name || "ZopChat User")}</h4>
         <p>${escapeHtml(formatMobileDisplay(chat.other?.mobile) || chat.lastMessage || "")}</p>
@@ -792,7 +967,20 @@ function renderSearchChatList() {
         <p>${escapeHtml(formatTime(chat.lastMessageAt))}</p>
       </div>
     `;
-    button.addEventListener("click", () => openChat(chat.id, chat.other, chat));
+    button.addEventListener("click", (event) => {
+      if (event.target.closest("[data-chat-avatar]")) return;
+      openChat(chat.id, chat.other, chat);
+    });
+    button.querySelector("[data-chat-avatar]")?.addEventListener("click", (event) => {
+      event.stopPropagation();
+      openProfilePreview({
+        title: chat.other?.name || "Profile",
+        photoURL: chat.other?.photoURL || DEFAULT_AVATAR,
+        chatId: chat.id,
+        profile: chat.other,
+        chat,
+      });
+    });
     els.searchChatList.appendChild(button);
   });
 }
@@ -801,6 +989,60 @@ function openSettings() {
   renderSettings();
   hideInlineEditors();
   showScreen(els.settingsScreen);
+}
+
+function openProfilePreview({ title, photoURL, chatId = "", profile = null, chat = null, infoTarget = null }) {
+  state.profilePreview = {
+    title: title || "Profile",
+    photoURL: photoURL || DEFAULT_AVATAR,
+    chatId,
+    profile,
+    chat,
+    infoTarget,
+  };
+  els.profilePreviewName.textContent = state.profilePreview.title;
+  els.profilePreviewPhoto.src = state.profilePreview.photoURL;
+  els.profilePreviewPhoto.alt = `${state.profilePreview.title} profile photo`;
+  els.profilePreviewChatBtn.hidden = !chatId;
+  els.profilePreviewPop.classList.toggle("single-action", !chatId);
+  els.profilePreviewPop.hidden = false;
+}
+
+function closeProfilePreview() {
+  els.profilePreviewPop.hidden = true;
+  els.profilePreviewPop.classList.remove("single-action");
+  state.profilePreview = null;
+}
+
+function openProfilePreviewPhoto() {
+  const preview = state.profilePreview;
+  if (!preview) return;
+  closeProfilePreview();
+  openPhotoViewer([preview.photoURL], { profile: true, title: preview.title });
+}
+
+function openProfilePreviewChat() {
+  const preview = state.profilePreview;
+  if (!preview?.chatId) return;
+  closeProfilePreview();
+  openChat(preview.chatId, preview.profile, preview.chat);
+}
+
+function openProfilePreviewInfo() {
+  const preview = state.profilePreview;
+  if (!preview) return;
+  closeProfilePreview();
+  if (preview.infoTarget === "settings") {
+    openSettings();
+    return;
+  }
+  if (preview.chat?.type === "group") {
+    state.activeChatMeta = preview.chat;
+    state.activeChatData = preview.chat;
+    openGroupProfileScreen();
+    return;
+  }
+  openReceiverProfileScreen(preview.profile || state.activeReceiver, true);
 }
 
 function hideInlineEditors() {
@@ -973,19 +1215,93 @@ async function handleMobileUpdate(event) {
   }
 }
 
-function openSearchPage() {
-  els.searchMobile.value = "";
+function openSearchPage(initialMobile = "") {
+  if (typeof initialMobile !== "string") initialMobile = "";
+  els.searchMobile.value = initialMobile;
   els.searchResult.innerHTML = "";
   renderSearchChatList();
   renderGroupMemberPicker();
   showScreen(els.searchScreen);
-  window.setTimeout(() => els.searchMobile.focus(), 80);
+  window.setTimeout(() => {
+    els.searchMobile.focus();
+    if (initialMobile) handleSearch();
+  }, 80);
 }
 
 function closeSearchPage() {
   els.searchMobile.value = "";
   els.searchResult.innerHTML = "";
   showScreen(els.homeScreen);
+}
+
+function parseZopChatQr(value) {
+  const text = String(value || "").trim();
+  if (!text) return "";
+  if (text.startsWith("zopchat:user:")) return text.slice("zopchat:user:".length).trim();
+  return text;
+}
+
+async function handleQrScanValue(value) {
+  const scanned = parseZopChatQr(value);
+  const mobile = normalizeMobile(scanned);
+  closeQrScanner();
+
+  if (isValidIndianMobile(mobile)) {
+    openSearchPage(mobile);
+    return;
+  }
+
+  const profile = await getUserProfile(scanned).catch(() => null);
+  if (profile?.mobile) {
+    openSearchPage(profile.mobile);
+    return;
+  }
+
+  showToast("This QR code is not a valid ZopChat user.", "error");
+}
+
+async function scanQrFrame() {
+  if (!state.qrDetector || !els.qrScanVideo?.srcObject) return;
+  try {
+    const codes = await state.qrDetector.detect(els.qrScanVideo);
+    if (codes.length) {
+      await handleQrScanValue(codes[0].rawValue);
+      return;
+    }
+  } catch (error) {
+    console.warn("QR scan frame failed", error);
+  }
+  state.qrScanFrame = requestAnimationFrame(scanQrFrame);
+}
+
+async function openQrScanner() {
+  if (!("BarcodeDetector" in window)) {
+    showToast("QR scanner is not supported in this browser.", "error");
+    return;
+  }
+  try {
+    state.qrDetector = state.qrDetector || new BarcodeDetector({ formats: ["qr_code"] });
+    const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
+    state.qrScanStream = stream;
+    els.qrScanVideo.srcObject = stream;
+    els.qrScanner.hidden = false;
+    els.qrScanStatus.textContent = "Point the camera at a ZopChat QR code.";
+    await els.qrScanVideo.play();
+    state.qrScanFrame = requestAnimationFrame(scanQrFrame);
+  } catch (error) {
+    console.error(error);
+    showToast("Camera permission is needed to scan QR.", "error");
+    closeQrScanner();
+  }
+}
+
+function closeQrScanner() {
+  if (state.qrScanFrame) cancelAnimationFrame(state.qrScanFrame);
+  state.qrScanFrame = null;
+  state.qrScanStream?.getTracks().forEach((track) => track.stop());
+  state.qrScanStream = null;
+  if (els.qrScanVideo) els.qrScanVideo.srcObject = null;
+  if (els.qrScanner) els.qrScanner.hidden = true;
 }
 
 async function handleSearch(event) {
@@ -1129,6 +1445,31 @@ function inviteOnWhatsApp(mobile) {
   window.open(url, "_blank", "noopener");
 }
 
+async function shareZopChatApp() {
+  const text = [
+    "Join me on ZopChat.",
+    "Private, simple chats for our circle.",
+    "",
+    `Download ZopChat here: ${ZOPCHAT_DEMO_DOWNLOAD_URL}`,
+  ].join("\n");
+
+  try {
+    if (navigator.share) {
+      await navigator.share({
+        title: "ZopChat",
+        text,
+        url: ZOPCHAT_DEMO_DOWNLOAD_URL,
+      });
+      return;
+    }
+    await navigator.clipboard.writeText(text);
+    showToast("Share text copied.");
+  } catch (error) {
+    console.error(error);
+    showToast("Could not share right now.", "error");
+  }
+}
+
 function handleSearchInput() {
   window.clearTimeout(state.searchTimer);
   els.searchResult.innerHTML = "";
@@ -1227,6 +1568,15 @@ async function createGroup(event) {
   openChat(chatRef.id, null, { id: chatRef.id, type: "group", groupName: name, groupPhotoURL, members });
 }
 
+function scrollMessagesToBottom() {
+  requestAnimationFrame(() => {
+    els.messages.scrollTop = els.messages.scrollHeight;
+    setTimeout(() => {
+      els.messages.scrollTop = els.messages.scrollHeight;
+    }, 80);
+  });
+}
+
 function openChat(chatId, receiver, chatMeta = null) {
   state.activeChatId = chatId;
   state.activeReceiver = receiver;
@@ -1239,6 +1589,7 @@ function openChat(chatId, receiver, chatMeta = null) {
   state.messageElements.clear();
   state.messageData.clear();
   showScreen(els.chatScreen);
+  scrollMessagesToBottom();
   if (!isGroup) listenToActiveReceiver(receiver?.uid);
   listenToActiveChat(chatId);
   listenToMessages(chatId);
@@ -1320,7 +1671,7 @@ function listenToMessages(chatId) {
         }
         state.messageElements.set(id, row);
       });
-      els.messages.scrollTop = els.messages.scrollHeight;
+      scrollMessagesToBottom();
     },
     (error) => {
       console.error(error);
@@ -1391,7 +1742,7 @@ function buildMessageElement(id, message) {
   const textMarkup = deleted
     ? `<p class="deleted-message">This message was deleted</p>`
     : message.type === "file"
-      ? `<div class="file-card"><strong>${escapeHtml(message.fileName || "File")}</strong><button type="button" data-file-url="${escapeHtml(message.fileURL || "")}">Download</button></div>`
+      ? `<div class="file-card"><strong>${escapeHtml(message.fileName || "File")}</strong><button type="button" data-file-url="${escapeHtml(message.fileDownloadURL || cloudinaryAttachmentUrl(message.fileURL || ""))}">Download</button></div>`
     : message.text
       ? `<p>${escapeHtml(message.text)}</p>`
       : "";
@@ -1417,15 +1768,7 @@ function buildMessageElement(id, message) {
 
   const photoAlbum = row.querySelector("[data-photo-album]");
   if (photoAlbum) {
-    photoAlbum.addEventListener("click", (event) => {
-      if (state.selectedMessageIds.size) {
-        event.preventDefault();
-        event.stopPropagation();
-        toggleMessageSelection(id);
-        return;
-      }
-      openPhotoViewer(getMessageImages(message));
-    });
+    photoAlbum.addEventListener("click", () => openPhotoViewer(getMessageImages(message)));
   }
   const emoji = row.querySelector("[data-emoji-for]");
   if (emoji) {
@@ -1435,7 +1778,7 @@ function buildMessageElement(id, message) {
     });
   }
   row.querySelector("[data-file-url]")?.addEventListener("click", () => {
-    window.open(message.fileURL, "_blank", "noopener");
+    window.open(message.fileDownloadURL || cloudinaryAttachmentUrl(message.fileURL), "_blank", "noopener");
   });
   row.querySelectorAll("[data-reaction-owner]").forEach((reaction) => {
     reaction.addEventListener("click", (event) => {
@@ -1484,49 +1827,70 @@ function bindMessageGestures(row, id, message) {
   let startX = 0;
   let startY = 0;
   let swiping = false;
+  let didLongPress = false;
   const bubble = row.querySelector(".bubble");
+
+  const resetBubble = () => {
+    if (bubble) bubble.style.transform = "";
+  };
+
+  const isGestureControl = (target) => target.closest("[data-photo-album], [data-emoji-for], [data-reaction-owner], [data-file-url], button");
 
   row.addEventListener("contextmenu", (event) => {
     event.preventDefault();
-    toggleMessageSelection(id);
+    openMessageActions(id);
   });
 
   row.addEventListener("click", (event) => {
+    if (didLongPress) {
+      event.preventDefault();
+      didLongPress = false;
+      return;
+    }
     if (!state.selectedMessageIds.size) return;
-    if (event.target.closest("[data-photo-album], [data-emoji-for], [data-reaction-owner]")) return;
+    if (isGestureControl(event.target)) return;
     event.preventDefault();
     toggleMessageSelection(id);
   });
 
   row.addEventListener("pointerdown", (event) => {
+    if (isGestureControl(event.target)) return;
     startX = event.clientX;
     startY = event.clientY;
     swiping = false;
-    pressTimer = window.setTimeout(() => toggleMessageSelection(id), 520);
+    didLongPress = false;
+    row.setPointerCapture?.(event.pointerId);
+    pressTimer = window.setTimeout(() => {
+      didLongPress = true;
+      resetBubble();
+      openMessageActions(id);
+    }, 560);
   });
 
   row.addEventListener("pointermove", (event) => {
     if (event.pointerType === "mouse") return;
     const dx = event.clientX - startX;
     const dy = event.clientY - startY;
-    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) window.clearTimeout(pressTimer);
+    if (Math.abs(dx) > 12 || Math.abs(dy) > 12) window.clearTimeout(pressTimer);
     if (Math.abs(dx) > 28 && Math.abs(dx) > Math.abs(dy) * 1.4) {
       swiping = true;
-      bubble.style.transform = `translateX(${Math.max(-58, Math.min(58, dx))}px)`;
+      if (bubble) bubble.style.transform = `translateX(${Math.max(-58, Math.min(58, dx))}px)`;
     }
   });
 
   row.addEventListener("pointerup", (event) => {
     window.clearTimeout(pressTimer);
+    row.releasePointerCapture?.(event.pointerId);
     if (event.pointerType === "mouse") return;
     const dx = event.clientX - startX;
-    bubble.style.transform = "";
-    if (swiping && Math.abs(dx) > 42) setReply(id);
+    resetBubble();
+    if (!didLongPress && swiping && Math.abs(dx) > 42) setReply(id);
   });
 
-  row.addEventListener("pointercancel", () => {
+  row.addEventListener("pointercancel", (event) => {
     window.clearTimeout(pressTimer);
-    bubble.style.transform = "";
+    row.releasePointerCapture?.(event.pointerId);
+    resetBubble();
   });
 }
 
@@ -1654,16 +2018,19 @@ async function handleSendFiles() {
     showToast("Messaging is blocked for this chat.", "error");
     return;
   }
+
   setButtonLoading(els.sendMessageBtn, true, "...");
   try {
     for (const file of files) {
       const fileURL = await uploadFileToCloudinary(file);
+      const fileDownloadURL = cloudinaryAttachmentUrl(fileURL);
       const now = serverTimestamp();
       await addDoc(collection(db, "chats", state.activeChatId, "messages"), {
         senderId: state.currentUser.uid,
         text: "",
         type: "file",
         fileURL,
+        fileDownloadURL,
         fileName: file.name || "File",
         fileSize: file.size || 0,
         createdAt: now,
@@ -1706,15 +2073,17 @@ async function downloadImage(url) {
   }
 }
 
-function openPhotoViewer(urls) {
+function openPhotoViewer(urls, options = {}) {
   state.viewerPhotoUrls = Array.isArray(urls) ? urls : [urls];
   state.viewerPhotoUrl = state.viewerPhotoUrls[0] || "";
+  els.photoViewerTitle.textContent = options.title || (options.profile ? "Profile photo" : "Photo");
+  els.photoViewer.classList.toggle("profile-photo-viewer", Boolean(options.profile));
   els.viewerPhotoList.innerHTML = state.viewerPhotoUrls
     .map(
       (url, index) => `
         <div class="viewer-photo-item">
-          <img src="${escapeHtml(url)}" alt="Shared photo ${index + 1}" />
-          <button class="viewer-download-btn" type="button" title="Download" data-save-photo="${escapeHtml(url)}">⇩</button>
+          <img src="${escapeHtml(url)}" alt="${escapeHtml(options.title || `Shared photo ${index + 1}`)}" />
+          ${options.profile ? "" : `<button class="primary-btn compact" type="button" data-save-photo="${escapeHtml(url)}">Save</button>`}
         </div>
       `,
     )
@@ -1727,6 +2096,7 @@ function openPhotoViewer(urls) {
 
 function closePhotoViewer() {
   els.photoViewer.hidden = true;
+  els.photoViewer.classList.remove("profile-photo-viewer");
   els.viewerPhotoList.innerHTML = "";
   state.viewerPhotoUrl = "";
   state.viewerPhotoUrls = [];
@@ -1779,6 +2149,7 @@ function getSelectedIds() {
 
 function openReactionPicker(id) {
   state.selectedMessageId = id;
+  els.messageActions.hidden = true;
   els.reactionActions.hidden = false;
 }
 
@@ -2039,7 +2410,7 @@ function openReceiverProfileScreen(profile, forceUserProfile = false) {
   els.fullUserName.textContent = profile.name || "ZopChat User";
   els.fullUserAbout.textContent = canSee(profile, "about") ? profile.about || "Hey there! I am using ZopChat." : "About is private";
   els.fullUserMobile.textContent = formatMobileDisplay(profile.mobile);
-  els.fullUserEmail.closest(".setting-row").hidden = true;
+  els.fullUserEmail.textContent = profile.email || "-";
   els.fullUserStatus.textContent = profile.online ? "Online" : canSee(profile, "lastSeen") ? formatLastSeen(profile.lastSeen) : "Offline";
   els.blockUserBtn.textContent = state.currentProfile?.blockedUsers?.[profile.uid] ? "Unblock user" : "Block user";
   els.groupEditForm.hidden = true;
@@ -2056,7 +2427,6 @@ async function openGroupProfileScreen() {
   els.fullUserName.textContent = chat.groupName || "Group";
   els.fullUserAbout.textContent = chat.groupDescription || "No description";
   els.fullUserMobile.textContent = "Group chat";
-  els.fullUserEmail.closest(".setting-row").hidden = false;
   els.fullUserEmail.textContent = `${chat.members?.length || 0} members`;
   els.fullUserStatus.textContent = isAdmin ? "You are admin" : "Member";
   els.blockUserBtn.style.display = "none";
@@ -2127,7 +2497,6 @@ function renderMediaGallery() {
 
 function backToChatFromReceiverProfile() {
   els.blockUserBtn.style.display = "";
-  els.fullUserEmail.closest(".setting-row").hidden = false;
   if (state.activeChatId) {
     showScreen(els.chatScreen);
   } else {
@@ -2255,6 +2624,50 @@ function bindPresenceEvents() {
   });
 }
 
+function bindScrollClickGuard() {
+  document.addEventListener(
+    "pointerdown",
+    (event) => {
+      if (event.pointerType === "mouse") return;
+      state.touchStartX = event.clientX;
+      state.touchStartY = event.clientY;
+      state.touchMoved = false;
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "pointermove",
+    (event) => {
+      if (event.pointerType === "mouse") return;
+      const dx = event.clientX - state.touchStartX;
+      const dy = event.clientY - state.touchStartY;
+      if (Math.hypot(dx, dy) > 14) state.touchMoved = true;
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "pointerup",
+    (event) => {
+      if (event.pointerType === "mouse") return;
+      if (state.touchMoved) state.suppressClickUntil = Date.now() + 360;
+    },
+    true,
+  );
+
+  document.addEventListener(
+    "click",
+    (event) => {
+      if (Date.now() > state.suppressClickUntil) return;
+      event.preventDefault();
+      event.stopImmediatePropagation();
+      state.suppressClickUntil = 0;
+    },
+    true,
+  );
+}
+
 function bindEvents() {
   els.googleLoginBtn.addEventListener("click", handleGoogleLogin);
   els.mobileLoginForm.addEventListener("submit", handleMobileLogin);
@@ -2263,7 +2676,18 @@ function bindEvents() {
   els.openProfileBtn.addEventListener("click", openSettings);
   els.settingsBackBtn.addEventListener("click", () => showScreen(els.homeScreen));
   els.settingsLogoutBtn.addEventListener("click", logout);
-  els.settingsPhotoInput.addEventListener("change", () => updateSettingsPhoto(els.settingsPhotoInput.files?.[0]));
+  els.settingsPhotoInput.addEventListener("change", () => {
+    const file = els.settingsPhotoInput.files?.[0];
+    els.settingsPhotoInput.value = "";
+    if (file) openPhotoCropper(file, "settings");
+  });
+  els.settingsAvatar.addEventListener("click", () => {
+    openProfilePreview({
+      title: state.currentProfile?.name ? `${state.currentProfile.name} (You)` : "You",
+      photoURL: state.currentProfile?.photoURL || DEFAULT_AVATAR,
+      infoTarget: "settings",
+    });
+  });
   document.querySelectorAll("[data-edit-field]").forEach((button) => {
     button.addEventListener("click", () => toggleInlineEditor(button.dataset.editField));
   });
@@ -2293,7 +2717,12 @@ function bindEvents() {
     showToast(count ? `${count} user blocked.` : "No blocked users yet.");
   });
   els.notificationsBtn.addEventListener("click", () => showToast("Notification controls will be added in the next ZopChat version."));
-  els.openSearchBtn.addEventListener("click", openSearchPage);
+  els.shareAppBtn.addEventListener("click", shareZopChatApp);
+  els.scanQrBtn.addEventListener("click", openQrScanner);
+  els.closeQrScannerBtn.addEventListener("click", closeQrScanner);
+  els.qrScanner.addEventListener("click", (event) => {
+    if (event.target === els.qrScanner) closeQrScanner();
+  });
   els.startChatBtn.addEventListener("click", openSearchPage);
   els.emptyStartChatBtn.addEventListener("click", openSearchPage);
   els.openCreateGroupBtn.addEventListener("click", () => {
@@ -2312,6 +2741,15 @@ function bindEvents() {
   els.backHomeBtn.addEventListener("click", backToHome);
   els.openReceiverProfileBtn.addEventListener("click", () => openReceiverProfileScreen(state.activeReceiver));
   els.receiverProfileBackBtn.addEventListener("click", backToChatFromReceiverProfile);
+  els.fullUserAvatar.addEventListener("click", () => {
+    const title = els.fullUserName.textContent || "Profile photo";
+    openProfilePreview({
+      title,
+      photoURL: els.fullUserAvatar.src || DEFAULT_AVATAR,
+      profile: state.activeReceiver,
+      chat: state.activeChatMeta,
+    });
+  });
   els.groupEditForm.addEventListener("submit", saveGroupProfile);
   els.editGroupPhoto.addEventListener("change", () => {
     const file = els.editGroupPhoto.files?.[0];
@@ -2365,6 +2803,12 @@ function bindEvents() {
   els.photoViewer.addEventListener("click", (event) => {
     if (event.target === els.photoViewer) closePhotoViewer();
   });
+  els.profilePreviewPhotoBtn.addEventListener("click", openProfilePreviewPhoto);
+  els.profilePreviewChatBtn.addEventListener("click", openProfilePreviewChat);
+  els.profilePreviewInfoBtn.addEventListener("click", openProfilePreviewInfo);
+  els.profilePreviewPop.addEventListener("click", (event) => {
+    if (event.target === els.profilePreviewPop) closeProfilePreview();
+  });
   els.actionReplyBtn.addEventListener("click", () => setReply(state.selectedMessageId));
   els.actionCopyBtn.addEventListener("click", copySelectedMessage);
   els.actionEditBtn.addEventListener("click", editSelectedMessage);
@@ -2394,18 +2838,54 @@ function bindEvents() {
   els.profilePhotoInput.addEventListener("change", () => {
     const file = els.profilePhotoInput.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith("image/")) {
-      showToast("Choose a valid image file.", "error");
-      els.profilePhotoInput.value = "";
-      return;
-    }
-    state.selectedPhotoFile = file;
-    els.profilePreview.src = URL.createObjectURL(file);
+    els.profilePhotoInput.value = "";
+    openPhotoCropper(file, "setup");
+  });
+  els.cropImage.addEventListener("load", () => {
+    state.cropImage = els.cropImage;
+    const stageSize = els.cropStage.clientWidth;
+    state.cropBaseScale = Math.max(stageSize / state.cropImage.naturalWidth, stageSize / state.cropImage.naturalHeight);
+    resetCropPosition();
+  });
+  els.cropZoom.addEventListener("input", () => {
+    const zoom = Number(els.cropZoom.value) || 1;
+    state.cropScale = state.cropBaseScale * zoom;
+    renderCropImage();
+  });
+  els.cropStage.addEventListener("pointerdown", (event) => {
+    if (!state.cropImage) return;
+    state.cropDragging = true;
+    state.cropPointerX = event.clientX;
+    state.cropPointerY = event.clientY;
+    state.cropStartX = state.cropX;
+    state.cropStartY = state.cropY;
+    els.cropStage.setPointerCapture?.(event.pointerId);
+  });
+  els.cropStage.addEventListener("pointermove", (event) => {
+    if (!state.cropDragging) return;
+    state.cropX = state.cropStartX + event.clientX - state.cropPointerX;
+    state.cropY = state.cropStartY + event.clientY - state.cropPointerY;
+    renderCropImage();
+  });
+  els.cropStage.addEventListener("pointerup", (event) => {
+    state.cropDragging = false;
+    els.cropStage.releasePointerCapture?.(event.pointerId);
+  });
+  els.cropStage.addEventListener("pointercancel", (event) => {
+    state.cropDragging = false;
+    els.cropStage.releasePointerCapture?.(event.pointerId);
+  });
+  els.cropResetBtn.addEventListener("click", resetCropPosition);
+  els.cropDoneBtn.addEventListener("click", finishPhotoCrop);
+  els.cropCancelBtn.addEventListener("click", closePhotoCropper);
+  els.photoCropper.addEventListener("click", (event) => {
+    if (event.target === els.photoCropper) closePhotoCropper();
   });
 }
 
 bindEvents();
 bindPresenceEvents();
+bindScrollClickGuard();
 showScreen(els.loadingScreen);
 onAuthStateChanged(auth, (user) => {
   routeForUser(user).catch((error) => {
