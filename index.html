@@ -8,6 +8,69 @@
     <link rel="preconnect" href="https://www.gstatic.com" />
     <link rel="preconnect" href="https://api.cloudinary.com" />
     <link rel="stylesheet" href="./style.css" />
+    <style>
+      .home-tabs {
+        position: fixed;
+        inset: auto max(0px, calc((100vw - min(100vw, 1040px)) / 2)) 0 max(0px, calc((100vw - min(100vw, 1040px)) / 2));
+        top: auto;
+        z-index: 16;
+        min-height: 68px;
+        align-items: center;
+        padding: 8px 14px max(8px, env(safe-area-inset-bottom));
+        background: rgba(255, 255, 255, 0.96);
+        border-top: 1px solid var(--line);
+        border-bottom: 0;
+        box-shadow: 0 -10px 28px rgba(15, 23, 42, 0.08);
+      }
+
+      .home-tab {
+        position: relative;
+        min-height: 48px;
+        display: grid;
+        place-items: center;
+        gap: 2px;
+      }
+
+      .home-tab-icon {
+        font-size: 1.24rem;
+        line-height: 1;
+      }
+
+      .home-tab-label {
+        font-size: 0.74rem;
+        line-height: 1;
+      }
+
+      .home-tab-badge {
+        position: absolute;
+        top: 4px;
+        right: 24%;
+        min-width: 18px;
+        height: 18px;
+        display: grid;
+        place-items: center;
+        padding: 0 5px;
+        border-radius: 999px;
+        background: var(--accent);
+        color: white;
+        font-size: 0.68rem;
+        font-weight: 900;
+      }
+
+      .home-tab-badge[hidden] {
+        display: none;
+      }
+
+      .chat-list-wrap,
+      .status-wrap,
+      .coming-soon-panel {
+        padding-bottom: 112px;
+      }
+
+      .new-chat-fab {
+        bottom: max(84px, env(safe-area-inset-bottom));
+      }
+    </style>
   </head>
   <body>
     <div id="app" class="app-shell" aria-live="polite">
@@ -37,7 +100,7 @@
           <form class="form-stack" id="mobile-login-form" novalidate>
             <label>
               <span>Mobile number</span>
-              <input id="login-mobile" inputmode="tel" autocomplete="tel" placeholder="9876543210" />
+              <input id="login-mobile" inputmode="tel" autocomplete="tel" placeholder="+91 XXXXX XXXXX" />
             </label>
             <label>
               <span>ZopChat password</span>
@@ -45,6 +108,21 @@
             </label>
             <button class="secondary-btn" id="mobile-login-btn" type="submit">Login with mobile</button>
           </form>
+
+          <details class="email-signup-panel">
+            <summary>Sign up with email</summary>
+            <form class="form-stack" id="email-signup-form" novalidate>
+              <label>
+                <span>Email</span>
+                <input id="signup-email" type="email" autocomplete="email" placeholder="you@example.com" />
+              </label>
+              <label>
+                <span>Password</span>
+                <input id="signup-password" type="password" autocomplete="new-password" placeholder="Minimum 6 characters" />
+              </label>
+              <button class="secondary-btn" id="email-signup-btn" type="submit">Create email account</button>
+            </form>
+          </details>
         </section>
       </main>
 
@@ -73,7 +151,7 @@
             </label>
             <label>
               <span>Mobile number</span>
-              <input id="profile-mobile" inputmode="tel" autocomplete="tel" placeholder="9876543210" />
+              <input id="profile-mobile" inputmode="tel" autocomplete="tel" placeholder="+91 XXXXX XXXXX" />
             </label>
             <label>
               <span>ZopChat password</span>
@@ -93,8 +171,9 @@
           <div class="header-actions">
             <button class="icon-btn qr-scan-btn" id="scan-qr-btn" title="Scan QR code" type="button" aria-label="Scan QR code">
               <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path d="M4 4h6v6H4zM14 4h6v6h-6zM4 14h6v6H4z" />
-                <path d="M14 14h3v3h-3zM17 17h3v3h-3zM14 20h3" />
+                <path class="scan-corner" d="M5 9V5h4M15 5h4v4M19 15v4h-4M9 19H5v-4" />
+                <path d="M8 8h3v3H8zM14 8h2v2h-2zM8 14h2v2H8zM13 13h3v3h-3z" />
+                <path class="scan-beam" d="M6 12h12" />
               </svg>
             </button>
             <button class="avatar-btn" id="open-profile-btn" title="Your profile" type="button">
@@ -114,7 +193,59 @@
             <button class="primary-btn compact" id="empty-start-chat-btn" type="button">Start New Chat</button>
           </div>
         </section>
-        <button class="new-chat-fab" id="start-chat-btn" title="New chat" type="button" aria-label="New chat">+</button>
+        <section class="status-wrap" id="status-panel" hidden>
+          <form class="status-composer" id="status-form">
+            <input id="status-input" maxlength="180" placeholder="Write a status" />
+            <label class="status-attach" title="Add image">
+              <input id="status-image-input" type="file" accept="image/*" />
+              Img
+            </label>
+            <button class="status-attach" id="status-song-btn" type="button">Song</button>
+            <button class="primary-btn compact" type="submit">Post</button>
+          </form>
+          <section class="status-song-panel" id="status-song-panel" hidden>
+            <div class="song-search-row">
+              <input id="status-song-search" placeholder="Search online song" />
+              <button class="secondary-btn compact" id="status-song-search-btn" type="button">Search</button>
+            </div>
+            <div class="selected-song" id="selected-song" hidden></div>
+            <div class="song-results" id="song-results"></div>
+          </section>
+          <div class="section-title">
+            <h3>Recent status</h3>
+          </div>
+          <div class="status-list" id="status-list"></div>
+          <div class="empty-state" id="empty-status" hidden>
+            <div class="empty-icon">S</div>
+            <p>No status yet. Status updates disappear after 24 hours.</p>
+          </div>
+        </section>
+        <section class="coming-soon-panel" id="calls-panel" hidden>
+          <div class="empty-state">
+            <h3>Calls coming soon</h3>
+            <p>Voice and video calls will be added here.</p>
+          </div>
+        </section>
+        <nav class="home-tabs" aria-label="Home tabs">
+          <button class="home-tab active" id="home-tab-chats" type="button" aria-label="Chats">
+            <span class="home-tab-icon" aria-hidden="true">▤</span>
+            <span class="home-tab-label">Chats</span>
+            <span class="home-tab-badge" id="home-chat-badge" hidden>0</span>
+          </button>
+          <button class="home-tab" id="home-tab-status" type="button" aria-label="Status">
+            <span class="home-tab-icon status-dot" aria-hidden="true">◉</span>
+            <span class="home-tab-label">Status</span>
+            <span class="home-tab-badge" id="home-status-badge" hidden>0</span>
+          </button>
+          <button class="home-tab" id="home-tab-calls" type="button" aria-label="Calls">
+            <span class="home-tab-icon" aria-hidden="true">☎</span>
+            <span class="home-tab-label">Calls</span>
+          </button>
+        </nav>
+        <button class="new-chat-fab" id="start-chat-btn" title="New chat" type="button" aria-label="New chat">
+          <span class="fab-ring" aria-hidden="true"></span>
+          <span class="fab-plus" aria-hidden="true">+</span>
+        </button>
       </main>
 
       <main class="screen search-screen" id="search-screen" hidden>
@@ -128,10 +259,13 @@
         <section class="search-page-wrap">
           <div class="new-chat-panel">
             <form class="search-form page-search" id="search-form" novalidate>
-              <input id="search-mobile" inputmode="tel" autocomplete="tel" placeholder="Enter full mobile number" />
+              <input id="search-mobile" inputmode="tel" autocomplete="tel" placeholder="Enter mobile number" />
               <button class="primary-btn compact" id="search-btn" type="submit">Search</button>
             </form>
-            <button class="secondary-btn compact" id="open-create-group-btn" type="button">Create group</button>
+            <div class="new-chat-actions">
+              <button class="secondary-btn compact contact-pick-btn" id="pick-contact-btn" type="button">Pick contact</button>
+              <button class="secondary-btn compact create-group-toggle" id="open-create-group-btn" type="button">Create group</button>
+            </div>
           </div>
           <div class="search-result" id="search-result"></div>
           <form class="settings-card create-group-form" id="create-group-form" hidden>
@@ -171,22 +305,30 @@
 
         <section class="settings-wrap">
           <div class="settings-profile">
-            <img id="settings-avatar" alt="Your profile" />
-            <label class="photo-action">
-              <input id="settings-photo-input" type="file" accept="image/*" />
-              Change photo
-            </label>
+            <div class="profile-photo-shell">
+              <img id="settings-avatar" alt="Your profile" />
+              <label class="photo-action profile-photo-edit" title="Change photo">
+                <input id="settings-photo-input" type="file" accept="image/*" />
+                <span aria-hidden="true">+</span>
+              </label>
+            </div>
+            <span class="profile-chip">Your ZopChat profile</span>
             <h3 id="settings-name">Your name</h3>
             <p id="settings-about">Hey there! I am using ZopChat.</p>
+            <div class="profile-action-row">
+              <button class="profile-action" id="profile-qr-shortcut" type="button">QR</button>
+              <button class="profile-action" id="profile-share-shortcut" type="button">Share</button>
+            </div>
           </div>
 
+          <div class="settings-section-title">Account</div>
           <div class="settings-card">
             <div class="setting-row">
               <div>
                 <span>Name</span>
                 <strong id="settings-name-value">-</strong>
               </div>
-              <button class="text-btn" data-edit-field="name" type="button">Edit</button>
+              <button class="text-btn" data-edit-field="name" type="button" alt="edit">✏️</button>
             </div>
             <form class="inline-edit" id="edit-name-form" hidden>
               <input id="edit-name-input" placeholder="Your name" />
@@ -198,7 +340,7 @@
                 <span>Description</span>
                 <strong id="settings-about-value">-</strong>
               </div>
-              <button class="text-btn" data-edit-field="about" type="button">Edit</button>
+              <button class="text-btn" data-edit-field="about" type="button" alt="edit">✏️</button>
             </div>
             <form class="inline-edit" id="edit-about-form" hidden>
               <input id="edit-about-input" placeholder="About" />
@@ -210,7 +352,7 @@
                 <span>Mobile number</span>
                 <strong id="settings-mobile-value">-</strong>
               </div>
-              <button class="text-btn" data-edit-field="mobile" type="button">Update mobile number</button>
+              <button class="text-btn" data-edit-field="mobile" type="button" alt="change mobile number">✏️</button>
             </div>
             <form class="mobile-update" id="edit-mobile-form" hidden>
               <input id="edit-mobile-input" inputmode="tel" placeholder="New mobile number" />
@@ -223,6 +365,7 @@
             </form>
           </div>
 
+          <div class="settings-section-title">Privacy and chats</div>
           <div class="settings-card">
             <button class="setting-link" id="privacy-btn" type="button">Privacy</button>
             <form class="privacy-panel" id="privacy-form" hidden>
@@ -237,14 +380,14 @@
                 <span>Description</span>
                 <select id="privacy-about">
                   <option value="everyone">Everyone</option>
-                  <option value="nobody">Nobody</option>
+                  <option value="nobody">Only me</option>
                 </select>
               </label>
               <label>
                 <span>Last seen</span>
                 <select id="privacy-last-seen">
                   <option value="everyone">Everyone</option>
-                  <option value="nobody">Nobody</option>
+                  <option value="nobody">Only me</option>
                 </select>
               </label>
               <button class="primary-btn compact" type="submit">Save privacy</button>
@@ -298,7 +441,13 @@
             <input id="message-photo-input" type="file" accept="image/*" multiple />
           </label>
           <label class="hidden-file">
+            <input id="message-camera-input" type="file" accept="image/*" capture="environment" />
+          </label>
+          <label class="hidden-file">
             <input id="message-file-input" type="file" accept=".pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,*/*" multiple />
+          </label>
+          <label class="hidden-file">
+            <input id="chat-wallpaper-image-input" type="file" accept="image/*" />
           </label>
           <input id="message-input" autocomplete="off" placeholder="Message" />
           <button class="send-btn" id="send-message-btn" title="Send" type="submit">➤</button>
@@ -314,10 +463,21 @@
         </header>
         <section class="receiver-profile-wrap">
           <div class="receiver-hero">
-            <img id="full-user-avatar" alt="User profile" />
+            <div class="receiver-photo-shell">
+              <img id="full-user-avatar" alt="User profile" />
+            </div>
+            <span class="profile-chip">Contact profile</span>
             <h2 id="full-user-name">ZopChat User</h2>
             <p id="full-user-about">Hey there! I am using ZopChat.</p>
           </div>
+          <form class="settings-card contact-name-form" id="contact-name-form" hidden>
+            <label>
+              <span>Your saved name for this contact</span>
+              <input id="contact-name-input" placeholder="Name shown only to you" />
+            </label>
+            <button class="secondary-btn compact" id="star-friend-btn" type="button">Star friend</button>
+            <button class="primary-btn compact" type="submit">Save name</button>
+          </form>
           <form class="settings-card group-edit-card" id="group-edit-form" hidden>
             <input id="edit-group-name" placeholder="Group name" />
             <input id="edit-group-description" placeholder="Group description" />
@@ -356,6 +516,7 @@
                 <strong id="full-user-status">-</strong>
               </div>
             </div>
+            <button class="setting-link danger" id="profile-clear-chat-btn" type="button">Clear chat</button>
             <button class="setting-link danger" id="block-user-btn" type="button">Block user</button>
           </div>
           <div class="settings-card" id="group-members-card" hidden>
@@ -367,6 +528,11 @@
           </div>
           <div class="settings-card" id="media-gallery-card" hidden>
             <div class="setting-row"><div><span>Media gallery</span><strong id="media-count">0 photos</strong></div></div>
+            <div class="profile-media-tabs">
+              <button class="active" type="button">Media</button>
+              <button type="button">Links</button>
+              <button type="button">Docs</button>
+            </div>
             <div class="media-gallery" id="media-gallery"></div>
           </div>
         </section>
@@ -422,14 +588,27 @@
     <div class="qr-scanner-backdrop" id="qr-scanner" hidden>
       <section class="qr-scanner-panel">
         <header>
-          <h3>Scan QR</h3>
+          <h3>QR code</h3>
           <button class="icon-btn" id="close-qr-scanner-btn" title="Close" type="button">×</button>
         </header>
-        <div class="qr-video-wrap">
-          <video id="qr-scan-video" playsinline muted></video>
-          <div class="qr-frame" aria-hidden="true"></div>
+        <div class="qr-modal-tabs">
+          <button class="active" id="qr-tab-scan" type="button">Scan QR</button>
+          <button id="qr-tab-my" type="button">My QR code</button>
         </div>
-        <p id="qr-scan-status">Point the camera at a ZopChat QR code.</p>
+        <div class="qr-scan-pane" id="qr-scan-pane">
+          <div class="qr-video-wrap">
+            <video id="qr-scan-video" playsinline muted></video>
+            <div class="qr-frame" aria-hidden="true"></div>
+          </div>
+          <div class="qr-scan-actions">
+            <p id="qr-scan-status">Scan Zop Chat QR code.</p>
+            <button class="secondary-btn compact" id="qr-torch-btn" type="button">Torch</button>
+          </div>
+        </div>
+        <div class="qr-my-pane" id="qr-my-pane" hidden>
+          <img id="qr-modal-profile-qr" alt="Your ZopChat QR code" />
+          <p>Share this QR to start a ZopChat chat.</p>
+        </div>
       </section>
     </div>
 
@@ -447,16 +626,50 @@
     <div class="action-sheet-backdrop" id="chat-menu-actions" hidden>
       <section class="action-sheet">
         <button id="chat-menu-pin-btn" type="button">Pin chat</button>
+        <button id="chat-menu-mute-btn" type="button">Mute chat</button>
+        <button id="chat-menu-wallpaper-btn" type="button">Set chat wallpaper</button>
         <button id="chat-menu-profile-btn" type="button">View profile</button>
         <button id="chat-menu-cancel-btn" type="button">Cancel</button>
       </section>
     </div>
 
-    <div class="action-sheet-backdrop" id="attach-actions" hidden>
+    <div class="action-sheet-backdrop" id="wallpaper-actions" hidden>
       <section class="action-sheet">
+        <button id="wallpaper-change-btn" type="button">Change wallpaper</button>
+        <button id="wallpaper-delete-btn" class="danger" type="button">Delete wallpaper</button>
+        <button id="wallpaper-cancel-btn" type="button">Cancel</button>
+      </section>
+    </div>
+
+    <div class="action-sheet-backdrop" id="clear-chat-confirm" hidden>
+      <section class="action-sheet">
+        <p class="sheet-note">Clear all messages from this chat for you?</p>
+        <button id="clear-chat-confirm-btn" class="danger" type="button">Clear chat</button>
+        <button id="clear-chat-cancel-btn" type="button">Cancel</button>
+      </section>
+    </div>
+
+    <div class="status-viewer" id="status-viewer" hidden>
+      <button class="icon-btn" id="close-status-viewer-btn" type="button" title="Close">×</button>
+      <div class="status-viewer-body" id="status-viewer-body"></div>
+    </div>
+
+    <div class="action-sheet-backdrop" id="attach-actions" hidden>
+      <section class="action-sheet attach-sheet">
+        <button id="attach-camera-btn" type="button">Camera</button>
         <button id="attach-image-btn" type="button">Image</button>
         <button id="attach-file-btn" type="button">File / PDF</button>
         <button id="attach-cancel-btn" type="button">Cancel</button>
+      </section>
+    </div>
+
+    <div class="action-sheet-backdrop" id="share-actions" hidden>
+      <section class="action-sheet share-sheet">
+        <button id="share-native-btn" type="button">Share...</button>
+        <button id="share-whatsapp-btn" type="button">WhatsApp</button>
+        <button id="share-instagram-btn" type="button">Instagram</button>
+        <button id="share-copy-btn" type="button">Copy link</button>
+        <button id="share-cancel-btn" type="button">Cancel</button>
       </section>
     </div>
 
@@ -490,6 +703,7 @@
     </div>
 
     <div class="toast" id="toast" role="status" aria-live="polite"></div>
+    <button class="in-app-notification" id="in-app-notification" type="button" hidden></button>
 
     <script src="https://unpkg.com/lucide@latest/dist/umd/lucide.min.js"></script>
     <script type="module" src="./app.js"></script>

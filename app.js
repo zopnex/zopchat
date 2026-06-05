@@ -7,6 +7,7 @@ import {
   onAuthStateChanged,
   reload,
   sendEmailVerification,
+  createUserWithEmailAndPassword,
   signInWithPopup,
   signInWithEmailAndPassword,
   signOut,
@@ -52,7 +53,8 @@ const CLOUDINARY_UPLOAD_PRESET = "ml_default";
 const DEFAULT_AVATAR =
   "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160' viewBox='0 0 160 160'%3E%3Crect width='160' height='160' rx='80' fill='%23d9f8ec'/%3E%3Ccircle cx='80' cy='62' r='30' fill='%230f9f7a'/%3E%3Cpath d='M32 142c8-30 27-46 48-46s40 16 48 46' fill='%230f9f7a'/%3E%3C/svg%3E";
 const INVITE_AVATAR = "https://res.cloudinary.com/dsnuatuc8/image/upload/v1780190715/Screenshot_2026-05-31_065148_fohvc2.png";
-const ZOPCHAT_DEMO_DOWNLOAD_URL = new URL("admi.html", window.location.href).href;
+let zopchatDownloadUrl = "https://example.com/zopchat-download";
+let zopchatShareText = "Join me on ZopChat so we can chat faster and privately.";
 
 const app = initializeApp(firebaseConfig);
 const auth = getAuth(app);
@@ -94,11 +96,22 @@ const state = {
   qrScanStream: null,
   qrScanFrame: null,
   qrDetector: null,
+  qrTorchOn: false,
+  qrSwipeStartX: 0,
+  selectedStatusSong: null,
+  homeTab: "chats",
+  statuses: [],
+  unsubStatuses: null,
   touchStartX: 0,
   touchStartY: 0,
   touchMoved: false,
   suppressClickUntil: 0,
   chats: [],
+  chatLastActivity: new Map(),
+  notificationChatId: "",
+  currentScreenId: "loading",
+  historyReady: false,
+  handlingPopState: false,
   searchTimer: null,
   unsubChats: null,
   unsubMessages: null,
@@ -121,6 +134,10 @@ const els = {
   mobileLoginForm: $("mobile-login-form"),
   loginMobile: $("login-mobile"),
   loginPassword: $("login-password"),
+  emailSignupForm: $("email-signup-form"),
+  signupEmail: $("signup-email"),
+  signupPassword: $("signup-password"),
+  emailSignupBtn: $("email-signup-btn"),
   profileForm: $("profile-form"),
   profileName: $("profile-name"),
   profileMobile: $("profile-mobile"),
@@ -165,13 +182,38 @@ const els = {
   notificationsBtn: $("notifications-btn"),
   chatList: $("chat-list"),
   emptyChats: $("empty-chats"),
+  homeTabChats: $("home-tab-chats"),
+  homeTabStatus: $("home-tab-status"),
+  homeTabCalls: $("home-tab-calls"),
+  homeChatBadge: $("home-chat-badge"),
+  homeStatusBadge: $("home-status-badge"),
+  statusPanel: $("status-panel"),
+  callsPanel: $("calls-panel"),
+  statusForm: $("status-form"),
+  statusInput: $("status-input"),
+  statusImageInput: $("status-image-input"),
+  statusSongBtn: $("status-song-btn"),
+  statusSongPanel: $("status-song-panel"),
+  statusSongSearch: $("status-song-search"),
+  statusSongSearchBtn: $("status-song-search-btn"),
+  selectedSong: $("selected-song"),
+  songResults: $("song-results"),
+  statusList: $("status-list"),
+  emptyStatus: $("empty-status"),
   scanQrBtn: $("scan-qr-btn"),
   qrScanner: $("qr-scanner"),
   closeQrScannerBtn: $("close-qr-scanner-btn"),
   qrScanVideo: $("qr-scan-video"),
   qrScanStatus: $("qr-scan-status"),
+  qrTabScan: $("qr-tab-scan"),
+  qrTabMy: $("qr-tab-my"),
+  qrScanPane: $("qr-scan-pane"),
+  qrMyPane: $("qr-my-pane"),
+  qrModalProfileQr: $("qr-modal-profile-qr"),
+  qrTorchBtn: $("qr-torch-btn"),
   startChatBtn: $("start-chat-btn"),
   emptyStartChatBtn: $("empty-start-chat-btn"),
+  pickContactBtn: $("pick-contact-btn"),
   openCreateGroupBtn: $("open-create-group-btn"),
   createGroupForm: $("create-group-form"),
   groupNameInput: $("group-name-input"),
@@ -200,6 +242,10 @@ const els = {
   fullUserMobile: $("full-user-mobile"),
   fullUserEmail: $("full-user-email"),
   fullUserStatus: $("full-user-status"),
+  profileClearChatBtn: $("profile-clear-chat-btn"),
+  contactNameForm: $("contact-name-form"),
+  contactNameInput: $("contact-name-input"),
+  starFriendBtn: $("star-friend-btn"),
   blockUserBtn: $("block-user-btn"),
   groupEditForm: $("group-edit-form"),
   editGroupName: $("edit-group-name"),
@@ -221,7 +267,9 @@ const els = {
   messageInput: $("message-input"),
   attachMenuBtn: $("attach-menu-btn"),
   messagePhotoInput: $("message-photo-input"),
+  messageCameraInput: $("message-camera-input"),
   messageFileInput: $("message-file-input"),
+  chatWallpaperImageInput: $("chat-wallpaper-image-input"),
   sendMessageBtn: $("send-message-btn"),
   replyPreview: $("reply-preview"),
   replyTitle: $("reply-title"),
@@ -263,20 +311,151 @@ const els = {
   chatMenuBtn: $("chat-menu-btn"),
   chatMenuActions: $("chat-menu-actions"),
   chatMenuPinBtn: $("chat-menu-pin-btn"),
+  chatMenuMuteBtn: $("chat-menu-mute-btn"),
+  chatMenuWallpaperBtn: $("chat-menu-wallpaper-btn"),
   chatMenuProfileBtn: $("chat-menu-profile-btn"),
   chatMenuCancelBtn: $("chat-menu-cancel-btn"),
+  wallpaperActions: $("wallpaper-actions"),
+  wallpaperChangeBtn: $("wallpaper-change-btn"),
+  wallpaperDeleteBtn: $("wallpaper-delete-btn"),
+  wallpaperCancelBtn: $("wallpaper-cancel-btn"),
+  clearChatConfirm: $("clear-chat-confirm"),
+  clearChatConfirmBtn: $("clear-chat-confirm-btn"),
+  clearChatCancelBtn: $("clear-chat-cancel-btn"),
   attachActions: $("attach-actions"),
+  attachCameraBtn: $("attach-camera-btn"),
   attachImageBtn: $("attach-image-btn"),
   attachFileBtn: $("attach-file-btn"),
   attachCancelBtn: $("attach-cancel-btn"),
+  shareActions: $("share-actions"),
+  shareNativeBtn: $("share-native-btn"),
+  shareWhatsappBtn: $("share-whatsapp-btn"),
+  shareInstagramBtn: $("share-instagram-btn"),
+  shareCopyBtn: $("share-copy-btn"),
+  shareCancelBtn: $("share-cancel-btn"),
+  statusViewer: $("status-viewer"),
+  statusViewerBody: $("status-viewer-body"),
+  closeStatusViewerBtn: $("close-status-viewer-btn"),
+  inAppNotification: $("in-app-notification"),
   toast: $("toast"),
 };
 
-function showScreen(screen) {
+function screenIdFor(screen) {
+  if (screen === els.loadingScreen) return "loading";
+  if (screen === els.loginScreen) return "login";
+  if (screen === els.profileScreen) return "profile";
+  if (screen === els.homeScreen) return "home";
+  if (screen === els.searchScreen) return "search";
+  if (screen === els.settingsScreen) return "settings";
+  if (screen === els.chatScreen) return "chat";
+  if (screen === els.receiverProfileScreen) return "receiver-profile";
+  return "home";
+}
+
+function screenForId(screenId) {
+  return (
+    {
+      loading: els.loadingScreen,
+      login: els.loginScreen,
+      profile: els.profileScreen,
+      home: els.homeScreen,
+      search: els.searchScreen,
+      settings: els.settingsScreen,
+      chat: els.chatScreen,
+      "receiver-profile": els.receiverProfileScreen,
+    }[screenId] || els.homeScreen
+  );
+}
+
+function syncBrowserHistory(screenId, replace = false) {
+  if (!window.history?.pushState) return;
+  const stateObj = { zopchat: true, screenId };
+  if (!state.historyReady || replace) {
+    window.history.replaceState(stateObj, "", window.location.href);
+    state.historyReady = true;
+    return;
+  }
+  if (state.handlingPopState || state.currentScreenId === screenId) return;
+  window.history.pushState(stateObj, "", window.location.href);
+}
+
+function showScreen(screen, options = {}) {
+  const screenId = screenIdFor(screen);
   [els.loadingScreen, els.loginScreen, els.profileScreen, els.homeScreen, els.searchScreen, els.settingsScreen, els.chatScreen, els.receiverProfileScreen].forEach((el) => {
     el.hidden = el !== screen;
     el.classList.toggle("is-active", el === screen);
   });
+  if (options.history !== false) syncBrowserHistory(screenId, options.replaceHistory === true);
+  state.currentScreenId = screenId;
+}
+
+function cleanupChatScreenState() {
+  if (state.unsubMessages) state.unsubMessages();
+  if (state.unsubReceiver) state.unsubReceiver();
+  if (state.unsubActiveChat) state.unsubActiveChat();
+  setTyping(false);
+  state.unsubMessages = null;
+  state.unsubReceiver = null;
+  state.unsubActiveChat = null;
+  state.activeChatId = null;
+  state.activeReceiver = null;
+  state.activeChatMeta = null;
+  state.messageElements.clear();
+  state.messageData.clear();
+  clearReply();
+}
+
+function handleAppBackTo(screenId) {
+  state.handlingPopState = true;
+  if (els.statusViewer && !els.statusViewer.hidden) {
+    closeStatusViewer();
+    state.handlingPopState = false;
+    return;
+  }
+  if (els.photoViewer && !els.photoViewer.hidden) {
+    closePhotoViewer();
+    state.handlingPopState = false;
+    return;
+  }
+  if (els.profilePreviewPop && !els.profilePreviewPop.hidden) {
+    closeProfilePreview();
+    state.handlingPopState = false;
+    return;
+  }
+  if (els.qrScanner && !els.qrScanner.hidden) {
+    closeQrScanner();
+    state.handlingPopState = false;
+    return;
+  }
+  if (els.photoCropper && !els.photoCropper.hidden) {
+    closePhotoCropper();
+    state.handlingPopState = false;
+    return;
+  }
+  if (els.wallpaperActions && !els.wallpaperActions.hidden) {
+    els.wallpaperActions.hidden = true;
+    state.handlingPopState = false;
+    return;
+  }
+  if (els.clearChatConfirm && !els.clearChatConfirm.hidden) {
+    els.clearChatConfirm.hidden = true;
+    state.handlingPopState = false;
+    return;
+  }
+  if (screenId === "home") {
+    cleanupChatScreenState();
+    showScreen(els.homeScreen, { history: false });
+  } else if (screenId === "chat" && state.activeChatId) {
+    showScreen(els.chatScreen, { history: false });
+  } else if (screenId === "receiver-profile" && state.activeChatId) {
+    showScreen(els.receiverProfileScreen, { history: false });
+  } else if (["search", "settings", "profile", "login"].includes(screenId)) {
+    showScreen(screenForId(screenId), { history: false });
+  } else {
+    cleanupChatScreenState();
+    showScreen(els.homeScreen, { history: false });
+  }
+  state.handlingPopState = false;
 }
 
 function showToast(message, type = "info") {
@@ -369,6 +548,11 @@ function canSee(profile, field) {
   return (profile?.privacy?.[field] || "everyone") !== "nobody";
 }
 
+function contactDisplayName(profile, fallback = "ZopChat User") {
+  if (!profile?.uid) return profile?.name || fallback;
+  return state.currentProfile?.contactNames?.[profile.uid] || profile.name || fallback;
+}
+
 function isBlockedWith(profile) {
   return Boolean(state.currentProfile?.blockedUsers?.[profile?.uid] || profile?.blockedUsers?.[state.currentUser?.uid]);
 }
@@ -390,6 +574,18 @@ function escapeHtml(value) {
 async function getUserProfile(uid) {
   const snap = await getDoc(doc(db, "users", uid));
   return snap.exists() ? snap.data() : null;
+}
+
+async function loadAppConfig() {
+  try {
+    const snap = await getDoc(doc(db, "appConfig", "share"));
+    if (!snap.exists()) return;
+    const config = snap.data();
+    if (config.downloadUrl) zopchatDownloadUrl = config.downloadUrl;
+    if (config.shareText) zopchatShareText = config.shareText;
+  } catch (error) {
+    console.warn("App config load failed", error);
+  }
 }
 
 async function claimActiveSession(user) {
@@ -428,7 +624,7 @@ async function routeForUser(user) {
     state.currentProfile = null;
     state.sessionId = null;
     state.isForcedLogout = false;
-    showScreen(els.loginScreen);
+    showScreen(els.loginScreen, { replaceHistory: true });
     return;
   }
 
@@ -441,11 +637,12 @@ async function routeForUser(user) {
     await setOnlineStatus(true);
     state.currentProfile = { ...profile, online: true };
     populateHomeProfile(profile);
-    showScreen(els.homeScreen);
+    showScreen(els.homeScreen, { replaceHistory: true });
     listenToChats();
+    listenToStatuses();
   } else {
     populateProfileForm(profile);
-    showScreen(els.profileScreen);
+    showScreen(els.profileScreen, { replaceHistory: true });
   }
 }
 
@@ -478,6 +675,11 @@ function populateHomeProfile(profile) {
   applyWallpaper(profile?.wallpaper || "default");
 }
 
+function profileQrUrl(profile = state.currentProfile) {
+  const data = `zopchat:user:${profile?.mobile || profile?.uid || ""}`;
+  return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(data)}`;
+}
+
 function renderSettings(profile = state.currentProfile) {
   if (!profile) return;
   els.settingsAvatar.src = profile.photoURL || DEFAULT_AVATAR;
@@ -490,7 +692,8 @@ function renderSettings(profile = state.currentProfile) {
   els.privacyAbout.value = profile.privacy?.about || "everyone";
   els.privacyLastSeen.value = profile.privacy?.lastSeen || "everyone";
   els.wallpaperSelect.value = profile.wallpaper || "default";
-  els.profileQr.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(`zopchat:user:${profile.mobile || profile.uid}`)}`;
+  els.profileQr.src = profileQrUrl(profile);
+  if (els.qrModalProfileQr) els.qrModalProfileQr.src = profileQrUrl(profile);
   els.editNameInput.value = profile.name || "";
   els.editAboutInput.value = profile.about || "";
   els.editMobileInput.value = "";
@@ -503,11 +706,13 @@ function cleanupRealtime() {
   if (state.unsubReceiver) state.unsubReceiver();
   if (state.unsubActiveChat) state.unsubActiveChat();
   if (state.unsubOwnSession) state.unsubOwnSession();
+  if (state.unsubStatuses) state.unsubStatuses();
   state.unsubChats = null;
   state.unsubMessages = null;
   state.unsubReceiver = null;
   state.unsubActiveChat = null;
   state.unsubOwnSession = null;
+  state.unsubStatuses = null;
   state.messageElements.clear();
   state.messageData.clear();
   state.selectedMessageIds.clear();
@@ -549,6 +754,26 @@ async function handleMobileLogin(event) {
     showToast("Mobile number or password is incorrect.", "error");
   } finally {
     setButtonLoading($("mobile-login-btn"), false);
+  }
+}
+
+async function handleEmailSignup(event) {
+  event.preventDefault();
+  const email = els.signupEmail.value.trim();
+  const password = els.signupPassword.value.trim();
+  if (!email || password.length < 6) {
+    showToast("Enter email and minimum 6 character password.", "error");
+    return;
+  }
+  setButtonLoading(els.emailSignupBtn, true, "Creating...");
+  try {
+    await createUserWithEmailAndPassword(auth, email, password);
+    showToast("Account created. Complete your profile.");
+  } catch (error) {
+    console.error(error);
+    showToast(friendlyAuthError(), "error");
+  } finally {
+    setButtonLoading(els.emailSignupBtn, false);
   }
 }
 
@@ -821,6 +1046,7 @@ async function handleProfileSave(event) {
     showToast("Profile saved.");
     showScreen(els.homeScreen);
     listenToChats();
+    listenToStatuses();
   } catch (error) {
     console.error(error);
     const message =
@@ -879,6 +1105,7 @@ function listenToChats() {
         chats.push({ ...chat, other });
       }
       chats.sort((a, b) => timestampMillis(b.lastMessageAt || b.updatedAt || b.createdAt) - timestampMillis(a.lastMessageAt || a.updatedAt || a.createdAt));
+      detectIncomingChatNotifications(chats);
       state.chats = chats;
       renderChatList(chats);
       renderSearchChatList();
@@ -888,6 +1115,50 @@ function listenToChats() {
       showToast("Could not load chats.", "error");
     },
   );
+}
+
+function chatUnreadCount(chat) {
+  if (chat?.id === state.activeChatId) return 0;
+  if (!chat || chat.lastMessageSenderId === state.currentUser?.uid) return 0;
+  const lastRead = timestampMillis(chat.lastReadAt?.[state.currentUser?.uid]);
+  const lastMessage = timestampMillis(chat.lastMessageAt || chat.updatedAt || chat.createdAt);
+  if (lastRead && lastRead >= lastMessage) return 0;
+  const explicit = Number(chat.unreadCounts?.[state.currentUser?.uid] || chat.unread?.[state.currentUser?.uid] || 0);
+  if (Number.isFinite(explicit) && explicit > 0) return explicit;
+  return lastMessage > lastRead ? 1 : 0;
+}
+
+function chatTypingText(chat) {
+  const typing = chat?.typing || {};
+  const typingUid = Object.keys(typing).find((uid) => uid !== state.currentUser?.uid && typing[uid]);
+  return typingUid ? "typing..." : "";
+}
+
+function isMutedChat(chatId) {
+  return Boolean(state.currentProfile?.mutedChats?.[chatId]);
+}
+
+function detectIncomingChatNotifications(chats) {
+  chats.forEach((chat) => {
+    const lastTime = timestampMillis(chat.lastMessageAt || chat.updatedAt || chat.createdAt);
+    const previous = state.chatLastActivity.get(chat.id);
+    if (previous && lastTime > previous && chat.lastMessageSenderId && chat.lastMessageSenderId !== state.currentUser?.uid && chat.id !== state.activeChatId && !isMutedChat(chat.id)) {
+      const title = chat.type === "group" ? chat.groupName || "Group" : contactDisplayName(chat.other);
+      showInAppNotification(chat.id, title, chat.lastMessage || "New message");
+    }
+    state.chatLastActivity.set(chat.id, lastTime);
+  });
+}
+
+function showInAppNotification(chatId, title, message) {
+  if (!els.inAppNotification) return;
+  state.notificationChatId = chatId;
+  els.inAppNotification.innerHTML = `<strong>${escapeHtml(title)}</strong><span>${escapeHtml(message)}</span>`;
+  els.inAppNotification.hidden = false;
+  window.clearTimeout(showInAppNotification.timer);
+  showInAppNotification.timer = window.setTimeout(() => {
+    els.inAppNotification.hidden = true;
+  }, 5200);
 }
 
 function renderChatList(chats) {
@@ -901,24 +1172,28 @@ function renderChatList(chats) {
   });
 
   sortedChats.forEach((chat) => {
-    const title = chat.type === "group" ? chat.groupName || "Group" : chat.other?.name || "ZopChat User";
+    const title = chat.type === "group" ? chat.groupName || "Group" : contactDisplayName(chat.other);
     const avatar = chat.type === "group" ? chat.groupPhotoURL || DEFAULT_AVATAR : chat.other?.photoURL || DEFAULT_AVATAR;
+    const typingText = chatTypingText(chat);
+    const preview = typingText || chat.lastMessage || "Start chatting";
+    const unread = chatUnreadCount(chat);
+    const muted = isMutedChat(chat.id);
+    const starred = chat.other?.uid && state.currentProfile?.favoriteContacts?.[chat.other.uid];
     const button = document.createElement("button");
-    button.className = "chat-item";
+    button.className = `chat-item${unread ? " has-unread" : ""}${muted ? " is-muted" : ""}`;
     button.type = "button";
     button.innerHTML = `
       <img class="chat-avatar" src="${escapeHtml(avatar)}" alt="${escapeHtml(title)}" data-chat-avatar="true" />
       <div class="chat-meta">
-        <h4>${state.currentProfile?.pinnedChats?.[chat.id] ? "📌 " : ""}${escapeHtml(title)}</h4>
-        <p>${escapeHtml(chat.lastMessage || "Start chatting")}</p>
+        <h4>${state.currentProfile?.pinnedChats?.[chat.id] ? "📌 " : ""}${starred ? "★ " : ""}${escapeHtml(title)} ${muted ? "🔕" : ""}</h4>
+        <p class="${typingText ? "typing-preview" : ""}">${escapeHtml(preview)}</p>
       </div>
       <div class="chat-side">
         <p>${escapeHtml(formatTime(chat.lastMessageAt))}</p>
-        <button class="pin-btn" type="button" data-pin-chat="${escapeHtml(chat.id)}">${state.currentProfile?.pinnedChats?.[chat.id] ? "Unpin" : "Pin"}</button>
+        ${unread ? `<span class="unread-badge">${unread > 99 ? "99+" : unread}</span>` : ""}
       </div>
     `;
     button.addEventListener("click", (event) => {
-      if (event.target.closest("[data-pin-chat]")) return;
       if (event.target.closest("[data-chat-avatar]")) return;
       openChat(chat.id, chat.other, chat);
     });
@@ -932,12 +1207,28 @@ function renderChatList(chats) {
         chat,
       });
     });
-    button.querySelector("[data-pin-chat]").addEventListener("click", (event) => {
-      event.stopPropagation();
-      togglePinChat(chat.id);
-    });
     els.chatList.appendChild(button);
   });
+  updateHomeBadges();
+}
+
+function updateHomeBadges() {
+  const unread = state.chats.reduce((total, chat) => {
+    return total + chatUnreadCount(chat);
+  }, 0);
+  if (els.homeChatBadge) {
+    els.homeChatBadge.hidden = unread <= 0;
+    els.homeChatBadge.textContent = unread > 99 ? "99+" : String(unread);
+  }
+
+  const expiry = Date.now() - 24 * 60 * 60 * 1000;
+  const contactUids = new Set(state.chats.flatMap((chat) => chat.members || []));
+  contactUids.delete(state.currentUser?.uid);
+  const statusCount = state.statuses.filter((status) => contactUids.has(status.uid) && timestampMillis(status.createdAt) >= expiry).length;
+  if (els.homeStatusBadge) {
+    els.homeStatusBadge.hidden = statusCount <= 0;
+    els.homeStatusBadge.textContent = statusCount > 99 ? "99+" : String(statusCount);
+  }
 }
 
 function renderSearchChatList() {
@@ -958,9 +1249,9 @@ function renderSearchChatList() {
     button.className = "chat-item";
     button.type = "button";
     button.innerHTML = `
-      <img class="chat-avatar" src="${escapeHtml(chat.other?.photoURL || DEFAULT_AVATAR)}" alt="${escapeHtml(chat.other?.name || "User")}" data-chat-avatar="true" />
+      <img class="chat-avatar" src="${escapeHtml(chat.other?.photoURL || DEFAULT_AVATAR)}" alt="${escapeHtml(contactDisplayName(chat.other, "User"))}" data-chat-avatar="true" />
       <div class="chat-meta">
-        <h4>${escapeHtml(chat.other?.name || "ZopChat User")}</h4>
+        <h4>${escapeHtml(contactDisplayName(chat.other))}</h4>
         <p>${escapeHtml(formatMobileDisplay(chat.other?.mobile) || chat.lastMessage || "")}</p>
       </div>
       <div class="chat-side">
@@ -974,7 +1265,7 @@ function renderSearchChatList() {
     button.querySelector("[data-chat-avatar]")?.addEventListener("click", (event) => {
       event.stopPropagation();
       openProfilePreview({
-        title: chat.other?.name || "Profile",
+        title: contactDisplayName(chat.other, "Profile"),
         photoURL: chat.other?.photoURL || DEFAULT_AVATAR,
         chatId: chat.id,
         profile: chat.other,
@@ -983,6 +1274,178 @@ function renderSearchChatList() {
     });
     els.searchChatList.appendChild(button);
   });
+}
+
+function setHomeTab(tab) {
+  state.homeTab = tab;
+  els.homeTabChats.classList.toggle("active", tab === "chats");
+  els.homeTabStatus.classList.toggle("active", tab === "status");
+  els.homeTabCalls.classList.toggle("active", tab === "calls");
+  document.querySelector(".chat-list-wrap").hidden = tab !== "chats";
+  els.statusPanel.hidden = tab !== "status";
+  els.callsPanel.hidden = tab !== "calls";
+  els.startChatBtn.hidden = tab !== "chats";
+  if (tab === "status") renderStatuses();
+  if (tab === "calls") showToast("Calls coming soon.");
+}
+
+function listenToStatuses() {
+  if (state.unsubStatuses) state.unsubStatuses();
+  state.unsubStatuses = onSnapshot(collection(db, "statuses"), (snapshot) => {
+    state.statuses = snapshot.docs.map((statusDoc) => ({ id: statusDoc.id, ...statusDoc.data() }));
+    renderStatuses();
+  });
+}
+
+function renderStatuses() {
+  if (!els.statusList) return;
+  const contactUids = new Set(state.chats.flatMap((chat) => chat.members || []));
+  contactUids.add(state.currentUser?.uid);
+  const expiry = Date.now() - 24 * 60 * 60 * 1000;
+  const visible = state.statuses
+    .filter((status) => contactUids.has(status.uid) && timestampMillis(status.createdAt) >= expiry)
+    .sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
+
+  els.emptyStatus.hidden = visible.length > 0;
+  els.statusList.innerHTML = visible
+    .map((status) => {
+      const chat = state.chats.find((item) => item.other?.uid === status.uid);
+      const isMine = status.uid === state.currentUser?.uid;
+      const profile = isMine ? state.currentProfile : chat?.other;
+      return `
+        <div class="status-item" data-status-id="${escapeHtml(status.id)}">
+          <img src="${escapeHtml(profile?.photoURL || DEFAULT_AVATAR)}" alt="" />
+          <div>
+            <h4>${escapeHtml(isMine ? "My status" : contactDisplayName(profile))}</h4>
+            <p>${escapeHtml(status.imageURL ? status.songTitle ? `${status.songTitle} • Photo` : "Photo status" : status.audioURL ? status.songTitle || "Song status" : status.text || "")}</p>
+            <span>${escapeHtml(formatTime(status.createdAt))}</span>
+          </div>
+          ${isMine ? `<button class="text-btn danger" data-delete-status="${escapeHtml(status.id)}" type="button">Delete</button>` : ""}
+        </div>
+      `;
+    })
+    .join("");
+  els.statusList.querySelectorAll("[data-delete-status]").forEach((button) => {
+    button.addEventListener("click", (event) => {
+      event.stopPropagation();
+      deleteStatus(button.dataset.deleteStatus);
+    });
+  });
+  els.statusList.querySelectorAll("[data-status-id]").forEach((item) => {
+    item.addEventListener("click", () => openStatusViewer(item.dataset.statusId));
+  });
+  updateHomeBadges();
+}
+
+async function createStatus(event) {
+  event.preventDefault();
+  const text = els.statusInput.value.trim();
+  const imageFile = els.statusImageInput?.files?.[0] || null;
+  const song = state.selectedStatusSong;
+  if ((!text && !imageFile && !song) || !state.currentUser) return;
+  let imageURL = "";
+  if (imageFile) imageURL = await uploadImageToCloudinary(imageFile);
+  await addDoc(collection(db, "statuses"), {
+    uid: state.currentUser.uid,
+    text,
+    imageURL,
+    audioURL: song?.previewUrl || "",
+    songTitle: song?.trackName || "",
+    songArtist: song?.artistName || "",
+    songArtwork: song?.artworkUrl100 || "",
+    songViewUrl: song?.trackViewUrl || "",
+    createdAt: serverTimestamp(),
+  });
+  els.statusInput.value = "";
+  if (els.statusImageInput) els.statusImageInput.value = "";
+  clearSelectedStatusSong();
+  showToast("Status posted.");
+}
+
+async function deleteStatus(id) {
+  if (!id) return;
+  await deleteDoc(doc(db, "statuses", id));
+  showToast("Status deleted.");
+}
+
+function openStatusViewer(id) {
+  const status = state.statuses.find((item) => item.id === id);
+  if (!status || !els.statusViewer) return;
+  const chat = state.chats.find((item) => item.other?.uid === status.uid);
+  const isMine = status.uid === state.currentUser?.uid;
+  const profile = isMine ? state.currentProfile : chat?.other;
+  els.statusViewerBody.innerHTML = `
+    <div class="status-progress"><span></span></div>
+    <div class="status-viewer-head">
+      <img src="${escapeHtml(profile?.photoURL || DEFAULT_AVATAR)}" alt="" />
+      <div><strong>${escapeHtml(isMine ? "My status" : contactDisplayName(profile))}</strong><span>${escapeHtml(formatTime(status.createdAt))}</span></div>
+    </div>
+    <div class="status-viewer-content">
+      ${status.imageURL ? `<img src="${escapeHtml(status.imageURL)}" alt="Status photo" />` : ""}
+      ${status.audioURL ? `<div class="status-song-card">${status.songArtwork ? `<img src="${escapeHtml(status.songArtwork)}" alt="" />` : ""}<div><strong>${escapeHtml(status.songTitle || "Song")}</strong><span>${escapeHtml(status.songArtist || "Online song")}</span><small>Preview courtesy of iTunes</small></div></div><audio src="${escapeHtml(status.audioURL)}" controls autoplay></audio>` : ""}
+      ${status.text ? `<p>${escapeHtml(status.text)}</p>` : ""}
+    </div>
+  `;
+  els.statusViewer.hidden = false;
+}
+
+function clearSelectedStatusSong() {
+  state.selectedStatusSong = null;
+  if (els.selectedSong) {
+    els.selectedSong.hidden = true;
+    els.selectedSong.innerHTML = "";
+  }
+  if (els.songResults) els.songResults.innerHTML = "";
+}
+
+function renderSelectedStatusSong(song) {
+  if (!song || !els.selectedSong) return;
+  els.selectedSong.hidden = false;
+  els.selectedSong.innerHTML = `
+    ${song.artworkUrl100 ? `<img src="${escapeHtml(song.artworkUrl100)}" alt="" />` : ""}
+    <div><strong>${escapeHtml(song.trackName || "Song")}</strong><span>${escapeHtml(song.artistName || "")}</span></div>
+    <button class="text-btn danger" id="remove-status-song-btn" type="button">Remove</button>
+  `;
+  $("remove-status-song-btn")?.addEventListener("click", clearSelectedStatusSong);
+}
+
+async function searchOnlineStatusSongs() {
+  const term = els.statusSongSearch.value.trim();
+  if (!term) return;
+  els.songResults.innerHTML = `<p class="muted">Searching songs...</p>`;
+  try {
+    const url = `https://itunes.apple.com/search?term=${encodeURIComponent(term)}&media=music&entity=song&limit=8`;
+    const response = await fetch(url);
+    const data = await response.json();
+    const songs = (data.results || []).filter((song) => song.previewUrl);
+    els.songResults.innerHTML = songs.length
+      ? songs
+          .map(
+            (song, index) => `
+        <button class="song-result" type="button" data-song-index="${index}">
+          ${song.artworkUrl100 ? `<img src="${escapeHtml(song.artworkUrl100)}" alt="" />` : ""}
+          <span><strong>${escapeHtml(song.trackName || "Song")}</strong><small>${escapeHtml(song.artistName || "")}</small></span>
+        </button>
+      `,
+          )
+          .join("")
+      : `<p class="muted">No online song found.</p>`;
+    els.songResults.querySelectorAll("[data-song-index]").forEach((button) => {
+      button.addEventListener("click", () => {
+        state.selectedStatusSong = songs[Number(button.dataset.songIndex)];
+        renderSelectedStatusSong(state.selectedStatusSong);
+        els.songResults.innerHTML = "";
+      });
+    });
+  } catch (error) {
+    console.error(error);
+    els.songResults.innerHTML = `<p class="muted">Song search failed.</p>`;
+  }
+}
+
+function closeStatusViewer() {
+  if (els.statusViewer) els.statusViewer.hidden = true;
+  if (els.statusViewerBody) els.statusViewerBody.innerHTML = "";
 }
 
 function openSettings() {
@@ -1231,7 +1694,7 @@ function openSearchPage(initialMobile = "") {
 function closeSearchPage() {
   els.searchMobile.value = "";
   els.searchResult.innerHTML = "";
-  showScreen(els.homeScreen);
+  showScreen(els.homeScreen, { replaceHistory: true });
 }
 
 function parseZopChatQr(value) {
@@ -1244,16 +1707,24 @@ function parseZopChatQr(value) {
 async function handleQrScanValue(value) {
   const scanned = parseZopChatQr(value);
   const mobile = normalizeMobile(scanned);
-  closeQrScanner();
 
   if (isValidIndianMobile(mobile)) {
+    const mobileSnap = await getDoc(doc(db, "mobileNumbers", mobile)).catch(() => null);
+    const found = mobileSnap?.exists?.() ? mobileSnap.data() : null;
+    const profile = found?.uid ? await getUserProfile(found.uid).catch(() => null) : null;
+    closeQrScanner();
+    if (profile?.isProfileComplete) {
+      await createOrOpenChat(profile);
+      return;
+    }
     openSearchPage(mobile);
     return;
   }
 
   const profile = await getUserProfile(scanned).catch(() => null);
-  if (profile?.mobile) {
-    openSearchPage(profile.mobile);
+  closeQrScanner();
+  if (profile?.isProfileComplete) {
+    await createOrOpenChat(profile);
     return;
   }
 
@@ -1281,10 +1752,12 @@ async function openQrScanner() {
   }
   try {
     state.qrDetector = state.qrDetector || new BarcodeDetector({ formats: ["qr_code"] });
+    setQrModalTab("scan");
     const stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: "environment" } });
     state.qrScanStream = stream;
     els.qrScanVideo.srcObject = stream;
     els.qrScanner.hidden = false;
+    if (els.qrModalProfileQr) els.qrModalProfileQr.src = profileQrUrl();
     els.qrScanStatus.textContent = "Point the camera at a ZopChat QR code.";
     await els.qrScanVideo.play();
     state.qrScanFrame = requestAnimationFrame(scanQrFrame);
@@ -1300,8 +1773,30 @@ function closeQrScanner() {
   state.qrScanFrame = null;
   state.qrScanStream?.getTracks().forEach((track) => track.stop());
   state.qrScanStream = null;
+  state.qrTorchOn = false;
   if (els.qrScanVideo) els.qrScanVideo.srcObject = null;
+  if (els.qrTorchBtn) els.qrTorchBtn.classList.remove("active");
   if (els.qrScanner) els.qrScanner.hidden = true;
+}
+
+function setQrModalTab(tab) {
+  const scan = tab === "scan";
+  els.qrTabScan?.classList.toggle("active", scan);
+  els.qrTabMy?.classList.toggle("active", !scan);
+  if (els.qrScanPane) els.qrScanPane.hidden = !scan;
+  if (els.qrMyPane) els.qrMyPane.hidden = scan;
+}
+
+async function toggleQrTorch() {
+  const track = state.qrScanStream?.getVideoTracks?.()[0];
+  const capabilities = track?.getCapabilities?.() || {};
+  if (!track || !capabilities.torch) {
+    showToast("Torch is not supported on this camera.", "error");
+    return;
+  }
+  state.qrTorchOn = !state.qrTorchOn;
+  await track.applyConstraints({ advanced: [{ torch: state.qrTorchOn }] });
+  els.qrTorchBtn.classList.toggle("active", state.qrTorchOn);
 }
 
 async function handleSearch(event) {
@@ -1403,7 +1898,36 @@ async function saveWallpaper(event) {
 
 function applyWallpaper(wallpaper) {
   els.messages.classList.remove("wallpaper-mint", "wallpaper-pearl", "wallpaper-sky");
+  els.messages.style.backgroundImage = "";
+  els.messages.style.backgroundSize = "";
+  els.messages.style.backgroundPosition = "";
   if (wallpaper && wallpaper !== "default") els.messages.classList.add(`wallpaper-${wallpaper}`);
+}
+
+function applyActiveChatWallpaper() {
+  const personal = state.currentProfile?.chatWallpapers?.[state.activeChatId];
+  if (personal) {
+    els.messages.classList.remove("wallpaper-mint", "wallpaper-pearl", "wallpaper-sky");
+    els.messages.style.backgroundImage = `linear-gradient(rgba(244, 247, 245, 0.72), rgba(244, 247, 245, 0.72)), url("${personal}")`;
+    els.messages.style.backgroundSize = "cover";
+    els.messages.style.backgroundPosition = "center";
+    return;
+  }
+  applyWallpaper(state.currentProfile?.wallpaper || "default");
+}
+
+function hasPersonalChatWallpaper(chatId = state.activeChatId) {
+  return Boolean(state.currentProfile?.chatWallpapers?.[chatId]);
+}
+
+function openChatWallpaperActions() {
+  if (!hasPersonalChatWallpaper()) {
+    els.chatWallpaperImageInput.click();
+    return;
+  }
+  els.wallpaperChangeBtn.textContent = "Change wallpaper";
+  els.wallpaperDeleteBtn.hidden = false;
+  els.wallpaperActions.hidden = false;
 }
 
 async function togglePinChat(chatId) {
@@ -1417,6 +1941,66 @@ async function togglePinChat(chatId) {
     pinnedChats: { ...(state.currentProfile?.pinnedChats || {}), [chatId]: !pinned },
   };
   renderChatList(state.chats);
+}
+
+async function toggleMuteChat(chatId) {
+  const muted = isMutedChat(chatId);
+  await updateDoc(doc(db, "users", state.currentUser.uid), {
+    [`mutedChats.${chatId}`]: !muted,
+    updatedAt: serverTimestamp(),
+  });
+  state.currentProfile = {
+    ...state.currentProfile,
+    mutedChats: { ...(state.currentProfile?.mutedChats || {}), [chatId]: !muted },
+  };
+  renderChatList(state.chats);
+  showToast(muted ? "Chat unmuted." : "Chat muted.");
+}
+
+async function setPersonalChatWallpaper(file) {
+  if (!file || !state.activeChatId) return;
+  const url = await uploadImageToCloudinary(file);
+  await updateDoc(doc(db, "users", state.currentUser.uid), {
+    [`chatWallpapers.${state.activeChatId}`]: url,
+    updatedAt: serverTimestamp(),
+  });
+  state.currentProfile = {
+    ...state.currentProfile,
+    chatWallpapers: { ...(state.currentProfile?.chatWallpapers || {}), [state.activeChatId]: url },
+  };
+  applyActiveChatWallpaper();
+  showToast("Chat wallpaper updated.");
+}
+
+async function clearPersonalChatWallpaper() {
+  if (!state.activeChatId) return;
+  await updateDoc(doc(db, "users", state.currentUser.uid), {
+    [`chatWallpapers.${state.activeChatId}`]: null,
+    updatedAt: serverTimestamp(),
+  });
+  state.currentProfile = {
+    ...state.currentProfile,
+    chatWallpapers: { ...(state.currentProfile?.chatWallpapers || {}), [state.activeChatId]: null },
+  };
+  applyActiveChatWallpaper();
+  showToast("Chat wallpaper cleared.");
+}
+
+async function clearActiveChatForMe() {
+  if (!state.activeChatId || !state.currentUser) return;
+  const messagesSnap = await getDocs(collection(db, "chats", state.activeChatId, "messages"));
+  await Promise.all(messagesSnap.docs.map((messageDoc) => updateDoc(messageDoc.ref, { [`hiddenFor.${state.currentUser.uid}`]: true })));
+  showToast("Chat cleared for you.");
+}
+
+function openClearChatConfirm() {
+  if (!state.activeChatId) return;
+  els.clearChatConfirm.hidden = false;
+}
+
+async function confirmClearActiveChat() {
+  els.clearChatConfirm.hidden = true;
+  await clearActiveChatForMe();
 }
 
 function renderInviteCard(mobile) {
@@ -1437,28 +2021,40 @@ function inviteOnWhatsApp(mobile) {
   const text = [
     "Hey!",
     "",
-    "Join me on ZopChat so we can chat faster and privately.",
+    zopchatShareText,
     "",
-    `Download ZopChat here: ${ZOPCHAT_DEMO_DOWNLOAD_URL}`,
+    `Download ZopChat here: ${zopchatDownloadUrl}`,
   ].join("\n");
   const url = `https://wa.me/${mobile}?text=${encodeURIComponent(text)}`;
   window.open(url, "_blank", "noopener");
 }
 
 async function shareZopChatApp() {
+  if (els.shareActions) {
+    els.shareActions.hidden = false;
+    return;
+  }
+  await shareZopChatNative();
+}
+
+function buildShareText() {
   const text = [
     "Join me on ZopChat.",
-    "Private, simple chats for our circle.",
+    zopchatShareText,
     "",
-    `Download ZopChat here: ${ZOPCHAT_DEMO_DOWNLOAD_URL}`,
+    `Download ZopChat here: ${zopchatDownloadUrl}`,
   ].join("\n");
+  return text;
+}
 
+async function shareZopChatNative() {
+  const text = buildShareText();
   try {
     if (navigator.share) {
       await navigator.share({
         title: "ZopChat",
         text,
-        url: ZOPCHAT_DEMO_DOWNLOAD_URL,
+        url: zopchatDownloadUrl,
       });
       return;
     }
@@ -1470,6 +2066,24 @@ async function shareZopChatApp() {
   }
 }
 
+function openShareTarget(target) {
+  const text = buildShareText();
+  if (target === "whatsapp") {
+    window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank", "noopener");
+    return;
+  }
+  if (target === "instagram") {
+    navigator.clipboard?.writeText(text);
+    window.open("https://www.instagram.com/", "_blank", "noopener");
+    showToast("Share text copied for Instagram.");
+    return;
+  }
+  if (target === "copy") {
+    navigator.clipboard?.writeText(text);
+    showToast("Share text copied.");
+  }
+}
+
 function handleSearchInput() {
   window.clearTimeout(state.searchTimer);
   els.searchResult.innerHTML = "";
@@ -1477,6 +2091,29 @@ function handleSearchInput() {
   const mobile = normalizeMobile(els.searchMobile.value);
   if (!isValidIndianMobile(mobile)) return;
   state.searchTimer = window.setTimeout(() => handleSearch(), 250);
+}
+
+async function pickPhoneContact() {
+  if (!navigator.contacts?.select) {
+    showToast("Contact access is not supported in this browser.", "error");
+    return;
+  }
+  try {
+    const contacts = await navigator.contacts.select(["name", "tel"], { multiple: false });
+    const phone = contacts?.[0]?.tel?.[0] || "";
+    const mobile = normalizeMobile(phone);
+    if (!isValidIndianMobile(mobile)) {
+      showToast("Selected contact has no valid Indian mobile number.", "error");
+      return;
+    }
+    els.searchMobile.value = mobile;
+    handleSearch();
+  } catch (error) {
+    if (error?.name !== "AbortError") {
+      console.error(error);
+      showToast("Could not read contact.", "error");
+    }
+  }
 }
 
 async function createOrOpenChat(receiver) {
@@ -1583,16 +2220,44 @@ function openChat(chatId, receiver, chatMeta = null) {
   state.activeChatMeta = chatMeta;
   const isGroup = chatMeta?.type === "group";
   els.receiverAvatar.src = isGroup ? chatMeta.groupPhotoURL || DEFAULT_AVATAR : receiver?.photoURL || DEFAULT_AVATAR;
-  els.receiverName.textContent = isGroup ? chatMeta.groupName || "Group" : receiver?.name || "ZopChat User";
+  els.receiverName.textContent = isGroup ? chatMeta.groupName || "Group" : contactDisplayName(receiver);
   els.receiverStatus.textContent = isGroup ? `${chatMeta.members?.length || 0} members` : receiver?.online ? "Online" : "Last seen recently";
-  els.messages.innerHTML = "";
+  els.messages.innerHTML = `<div class="chat-loading">Loading messages...</div>`;
   state.messageElements.clear();
   state.messageData.clear();
+  applyActiveChatWallpaper();
   showScreen(els.chatScreen);
+  markActiveChatRead(chatId);
   scrollMessagesToBottom();
   if (!isGroup) listenToActiveReceiver(receiver?.uid);
   listenToActiveChat(chatId);
   listenToMessages(chatId);
+}
+
+async function markActiveChatRead(chatId = state.activeChatId) {
+  if (!chatId || !state.currentUser) return;
+  const now = new Date();
+  state.chats = state.chats.map((chat) =>
+    chat.id === chatId
+      ? {
+          ...chat,
+          lastReadAt: { ...(chat.lastReadAt || {}), [state.currentUser.uid]: now },
+          unreadCounts: { ...(chat.unreadCounts || {}), [state.currentUser.uid]: 0 },
+          unread: { ...(chat.unread || {}), [state.currentUser.uid]: 0 },
+        }
+      : chat,
+  );
+  renderChatList(state.chats);
+  updateHomeBadges();
+  try {
+    await updateDoc(doc(db, "chats", chatId), {
+      [`lastReadAt.${state.currentUser.uid}`]: serverTimestamp(),
+      [`unreadCounts.${state.currentUser.uid}`]: 0,
+      [`unread.${state.currentUser.uid}`]: 0,
+    });
+  } catch (error) {
+    console.warn("Chat read marker update failed", error);
+  }
 }
 
 function listenToActiveReceiver(uid) {
@@ -1604,7 +2269,7 @@ function listenToActiveReceiver(uid) {
     if (!snapshot.exists()) return;
     state.activeReceiver = snapshot.data();
     els.receiverAvatar.src = canSee(state.activeReceiver, "photo") ? state.activeReceiver.photoURL || DEFAULT_AVATAR : DEFAULT_AVATAR;
-    els.receiverName.textContent = state.activeReceiver.name || "ZopChat User";
+    els.receiverName.textContent = contactDisplayName(state.activeReceiver);
     renderReceiverStatus();
     refreshMessageReceipts();
   });
@@ -1644,6 +2309,7 @@ function listenToMessages(chatId) {
   state.unsubMessages = onSnapshot(
     messagesQuery,
     (snapshot) => {
+      els.messages.querySelector(".chat-loading")?.remove();
       snapshot.docChanges().forEach((change) => {
         const id = change.doc.id;
         if (change.type === "removed") {
@@ -1671,6 +2337,7 @@ function listenToMessages(chatId) {
         }
         state.messageElements.set(id, row);
       });
+      markActiveChatRead(chatId);
       scrollMessagesToBottom();
     },
     (error) => {
@@ -1700,17 +2367,28 @@ async function markMessageReadIfNeeded(messageId, message) {
       status: "read",
       readAt: serverTimestamp(),
     });
+    await updateDoc(doc(db, "chats", state.activeChatId), {
+      [`lastReadAt.${state.currentUser.uid}`]: serverTimestamp(),
+    });
   } catch (error) {
     console.warn("Read receipt update failed", error);
   }
 }
 
-function getReceiptMarkup(message, isMine) {
+function getReceiptMarkupLegacy(message, isMine) {
   if (!isMine || !state.activeReceiver) return "";
   const receiverRead = message.readBy?.[state.activeReceiver.uid] === true || message.status === "read";
   if (receiverRead) return `<span class="ticks read" title="Seen">✓✓</span>`;
   if (state.activeReceiver.online) return `<span class="ticks" title="Delivered">✓✓</span>`;
   return `<span class="ticks" title="Sent">✓</span>`;
+}
+
+function getReceiptMarkup(message, isMine) {
+  if (!isMine || !state.activeReceiver) return "";
+  const receiverRead = message.readBy?.[state.activeReceiver.uid] === true || message.status === "read";
+  if (receiverRead) return `<span class="ticks read" title="Seen">&#10003;&#10003;</span>`;
+  if (state.activeReceiver.online) return `<span class="ticks" title="Delivered">&#10003;&#10003;</span>`;
+  return `<span class="ticks" title="Sent">&#10003;</span>`;
 }
 
 function messagePreview(message) {
@@ -1774,7 +2452,7 @@ function buildMessageElement(id, message) {
   if (emoji) {
     emoji.addEventListener("click", (event) => {
       event.stopPropagation();
-      openReactionPicker(id);
+      openReactionPicker(id, event.currentTarget);
     });
   }
   row.querySelector("[data-file-url]")?.addEventListener("click", () => {
@@ -1784,7 +2462,7 @@ function buildMessageElement(id, message) {
     reaction.addEventListener("click", (event) => {
       event.stopPropagation();
       state.selectedMessageId = id;
-      openReactionPicker(id);
+      openReactionPicker(id, event.currentTarget);
     });
   });
   bindMessageGestures(row, id, message);
@@ -1947,9 +2625,10 @@ async function handleSendMessage(event) {
   }
 }
 
-async function handleSendPhoto() {
-  const files = Array.from(els.messagePhotoInput.files || []);
-  els.messagePhotoInput.value = "";
+async function handleSendPhoto(input = els.messagePhotoInput) {
+  if (input?.target) input = els.messagePhotoInput;
+  const files = Array.from(input?.files || []);
+  if (input) input.value = "";
   if (!files.length) return;
   if (files.some((file) => !file.type.startsWith("image/"))) {
     showToast("Choose a valid image file.", "error");
@@ -2020,6 +2699,17 @@ async function handleSendFiles() {
   }
 
   setButtonLoading(els.sendMessageBtn, true, "...");
+  const tempId = `upload-file-${Date.now()}`;
+  const tempMessage = {
+    senderId: state.currentUser.uid,
+    text: files.length > 1 ? `Uploading ${files.length} files...` : `Uploading ${files[0]?.name || "file"}...`,
+    type: "text",
+    createdAt: new Date(),
+    localProgress: true,
+  };
+  const tempRow = buildMessageElement(tempId, tempMessage);
+  els.messages.appendChild(tempRow);
+  scrollMessagesToBottom();
   try {
     for (const file of files) {
       const fileURL = await uploadFileToCloudinary(file);
@@ -2051,6 +2741,7 @@ async function handleSendFiles() {
     console.error(error);
     showToast(error.message || "File was not sent.", "error");
   } finally {
+    tempRow.remove();
     setButtonLoading(els.sendMessageBtn, false);
   }
 }
@@ -2102,6 +2793,45 @@ function closePhotoViewer() {
   state.viewerPhotoUrls = [];
 }
 
+function positionFloatingSheet(backdrop, anchor, preferred = "bottom") {
+  const sheet = backdrop?.querySelector(".action-sheet");
+  if (!backdrop || !sheet) return;
+  backdrop.classList.add("floating-popover");
+  backdrop.hidden = false;
+
+  requestAnimationFrame(() => {
+    const rect = anchor?.getBoundingClientRect?.() || {
+      left: window.innerWidth / 2,
+      right: window.innerWidth / 2,
+      top: window.innerHeight / 2,
+      bottom: window.innerHeight / 2,
+      width: 0,
+      height: 0,
+    };
+    const sheetRect = sheet.getBoundingClientRect();
+    const margin = 10;
+    let left = rect.left + rect.width / 2 - sheetRect.width / 2;
+    left = Math.max(margin, Math.min(window.innerWidth - sheetRect.width - margin, left));
+
+    let top = preferred === "top" ? rect.top - sheetRect.height - 8 : rect.bottom + 8;
+    if (top + sheetRect.height > window.innerHeight - margin) top = rect.top - sheetRect.height - 8;
+    if (top < margin) top = margin;
+
+    sheet.style.left = `${left}px`;
+    sheet.style.top = `${top}px`;
+  });
+}
+
+function closeFloatingSheet(backdrop) {
+  const sheet = backdrop?.querySelector(".action-sheet");
+  if (sheet) {
+    sheet.style.left = "";
+    sheet.style.top = "";
+  }
+  backdrop?.classList.remove("floating-popover");
+  if (backdrop) backdrop.hidden = true;
+}
+
 function openMessageActions(id) {
   const message = state.messageData.get(id);
   if (!message) return;
@@ -2147,14 +2877,14 @@ function getSelectedIds() {
   return state.selectedMessageIds.size ? Array.from(state.selectedMessageIds) : state.selectedMessageId ? [state.selectedMessageId] : [];
 }
 
-function openReactionPicker(id) {
+function openReactionPicker(id, anchor = null) {
   state.selectedMessageId = id;
   els.messageActions.hidden = true;
-  els.reactionActions.hidden = false;
+  positionFloatingSheet(els.reactionActions, anchor, "top");
 }
 
 function closeReactionPicker() {
-  els.reactionActions.hidden = true;
+  closeFloatingSheet(els.reactionActions);
 }
 
 function closeMessageActions(clear = true) {
@@ -2407,16 +3137,56 @@ function openReceiverProfileScreen(profile, forceUserProfile = false) {
   }
   if (!profile) return;
   els.fullUserAvatar.src = canSee(profile, "photo") ? profile.photoURL || DEFAULT_AVATAR : DEFAULT_AVATAR;
-  els.fullUserName.textContent = profile.name || "ZopChat User";
+  els.fullUserName.textContent = contactDisplayName(profile);
   els.fullUserAbout.textContent = canSee(profile, "about") ? profile.about || "Hey there! I am using ZopChat." : "About is private";
   els.fullUserMobile.textContent = formatMobileDisplay(profile.mobile);
   els.fullUserEmail.textContent = profile.email || "-";
   els.fullUserStatus.textContent = profile.online ? "Online" : canSee(profile, "lastSeen") ? formatLastSeen(profile.lastSeen) : "Offline";
   els.blockUserBtn.textContent = state.currentProfile?.blockedUsers?.[profile.uid] ? "Unblock user" : "Block user";
+  if (els.profileClearChatBtn) els.profileClearChatBtn.hidden = !state.activeChatId;
+  els.contactNameForm.hidden = false;
+  els.contactNameInput.value = state.currentProfile?.contactNames?.[profile.uid] || "";
+  if (els.starFriendBtn) els.starFriendBtn.textContent = state.currentProfile?.favoriteContacts?.[profile.uid] ? "Unstar friend" : "Star friend";
   els.groupEditForm.hidden = true;
   els.groupMembersCard.hidden = true;
   renderMediaGallery();
   showScreen(els.receiverProfileScreen);
+}
+
+async function saveContactName(event) {
+  event.preventDefault();
+  const uid = state.activeReceiver?.uid;
+  if (!uid || !state.currentUser) return;
+  const name = els.contactNameInput.value.trim();
+  await updateDoc(doc(db, "users", state.currentUser.uid), {
+    [`contactNames.${uid}`]: name || null,
+    updatedAt: serverTimestamp(),
+  });
+  state.currentProfile = {
+    ...state.currentProfile,
+    contactNames: { ...(state.currentProfile?.contactNames || {}), [uid]: name },
+  };
+  els.fullUserName.textContent = contactDisplayName(state.activeReceiver);
+  renderChatList(state.chats);
+  renderSearchChatList();
+  showToast("Name saved for you.");
+}
+
+async function toggleStarFriend() {
+  const uid = state.activeReceiver?.uid;
+  if (!uid || !state.currentUser) return;
+  const starred = Boolean(state.currentProfile?.favoriteContacts?.[uid]);
+  await updateDoc(doc(db, "users", state.currentUser.uid), {
+    [`favoriteContacts.${uid}`]: !starred,
+    updatedAt: serverTimestamp(),
+  });
+  state.currentProfile = {
+    ...state.currentProfile,
+    favoriteContacts: { ...(state.currentProfile?.favoriteContacts || {}), [uid]: !starred },
+  };
+  if (els.starFriendBtn) els.starFriendBtn.textContent = starred ? "Star friend" : "Unstar friend";
+  renderChatList(state.chats);
+  showToast(starred ? "Friend unstarred." : "Friend starred.");
 }
 
 async function openGroupProfileScreen() {
@@ -2430,6 +3200,8 @@ async function openGroupProfileScreen() {
   els.fullUserEmail.textContent = `${chat.members?.length || 0} members`;
   els.fullUserStatus.textContent = isAdmin ? "You are admin" : "Member";
   els.blockUserBtn.style.display = "none";
+  if (els.profileClearChatBtn) els.profileClearChatBtn.hidden = !state.activeChatId;
+  els.contactNameForm.hidden = true;
   els.groupEditForm.hidden = !isAdmin;
   els.editGroupName.value = chat.groupName || "";
   els.editGroupDescription.value = chat.groupDescription || "";
@@ -2498,9 +3270,9 @@ function renderMediaGallery() {
 function backToChatFromReceiverProfile() {
   els.blockUserBtn.style.display = "";
   if (state.activeChatId) {
-    showScreen(els.chatScreen);
+    showScreen(els.chatScreen, { replaceHistory: true });
   } else {
-    showScreen(els.homeScreen);
+    showScreen(els.homeScreen, { replaceHistory: true });
   }
 }
 
@@ -2576,21 +3348,9 @@ async function deleteGroup() {
   backToHome();
 }
 
-function backToHome() {
-  if (state.unsubMessages) state.unsubMessages();
-  if (state.unsubReceiver) state.unsubReceiver();
-  if (state.unsubActiveChat) state.unsubActiveChat();
-  setTyping(false);
-  state.unsubMessages = null;
-  state.unsubReceiver = null;
-  state.unsubActiveChat = null;
-  state.activeChatId = null;
-  state.activeReceiver = null;
-  state.activeChatMeta = null;
-  state.messageElements.clear();
-  state.messageData.clear();
-  clearReply();
-  showScreen(els.homeScreen);
+function backToHome(options = { replaceHistory: true }) {
+  cleanupChatScreenState();
+  showScreen(els.homeScreen, options);
 }
 
 async function logout() {
@@ -2671,10 +3431,11 @@ function bindScrollClickGuard() {
 function bindEvents() {
   els.googleLoginBtn.addEventListener("click", handleGoogleLogin);
   els.mobileLoginForm.addEventListener("submit", handleMobileLogin);
+  els.emailSignupForm?.addEventListener("submit", handleEmailSignup);
   els.profileForm.addEventListener("submit", handleProfileSave);
   els.profileLogoutBtn.addEventListener("click", logout);
   els.openProfileBtn.addEventListener("click", openSettings);
-  els.settingsBackBtn.addEventListener("click", () => showScreen(els.homeScreen));
+  els.settingsBackBtn.addEventListener("click", () => showScreen(els.homeScreen, { replaceHistory: true }));
   els.settingsLogoutBtn.addEventListener("click", logout);
   els.settingsPhotoInput.addEventListener("change", () => {
     const file = els.settingsPhotoInput.files?.[0];
@@ -2708,6 +3469,11 @@ function bindEvents() {
   els.qrBtn.addEventListener("click", () => {
     els.qrCard.hidden = !els.qrCard.hidden;
   });
+  $("profile-qr-shortcut")?.addEventListener("click", () => {
+    els.qrCard.hidden = false;
+    els.qrCard.scrollIntoView({ behavior: "smooth", block: "center" });
+  });
+  $("profile-share-shortcut")?.addEventListener("click", shareZopChatApp);
   els.wallpaperBtn.addEventListener("click", () => {
     els.wallpaperForm.hidden = !els.wallpaperForm.hidden;
   });
@@ -2718,13 +3484,80 @@ function bindEvents() {
   });
   els.notificationsBtn.addEventListener("click", () => showToast("Notification controls will be added in the next ZopChat version."));
   els.shareAppBtn.addEventListener("click", shareZopChatApp);
+  els.shareNativeBtn?.addEventListener("click", async () => {
+    els.shareActions.hidden = true;
+    await shareZopChatNative();
+  });
+  els.shareWhatsappBtn?.addEventListener("click", () => {
+    els.shareActions.hidden = true;
+    openShareTarget("whatsapp");
+  });
+  els.shareInstagramBtn?.addEventListener("click", () => {
+    els.shareActions.hidden = true;
+    openShareTarget("instagram");
+  });
+  els.shareCopyBtn?.addEventListener("click", () => {
+    els.shareActions.hidden = true;
+    openShareTarget("copy");
+  });
+  els.shareCancelBtn?.addEventListener("click", () => {
+    els.shareActions.hidden = true;
+  });
+  els.shareActions?.addEventListener("click", (event) => {
+    if (event.target === els.shareActions) els.shareActions.hidden = true;
+  });
+  els.homeTabChats.addEventListener("click", () => setHomeTab("chats"));
+  els.homeTabStatus.addEventListener("click", () => setHomeTab("status"));
+  els.homeTabCalls.addEventListener("click", () => setHomeTab("calls"));
+  els.statusForm.addEventListener("submit", createStatus);
+  els.statusImageInput?.addEventListener("change", () => {
+    if (els.statusImageInput.files?.[0]) {
+      els.statusSongPanel.hidden = false;
+      els.statusSongSearch.focus();
+    }
+  });
+  els.statusSongBtn?.addEventListener("click", () => {
+    els.statusSongPanel.hidden = !els.statusSongPanel.hidden;
+    if (!els.statusSongPanel.hidden) els.statusSongSearch.focus();
+  });
+  els.statusSongSearchBtn?.addEventListener("click", searchOnlineStatusSongs);
+  els.statusSongSearch?.addEventListener("keydown", (event) => {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      searchOnlineStatusSongs();
+    }
+  });
+  els.closeStatusViewerBtn?.addEventListener("click", closeStatusViewer);
+  els.statusViewer?.addEventListener("click", (event) => {
+    if (event.target === els.statusViewer) closeStatusViewer();
+  });
+  els.inAppNotification?.addEventListener("click", () => {
+    const chat = state.chats.find((item) => item.id === state.notificationChatId);
+    if (chat) {
+      els.inAppNotification.hidden = true;
+      openChat(chat.id, chat.other, chat);
+    }
+  });
   els.scanQrBtn.addEventListener("click", openQrScanner);
   els.closeQrScannerBtn.addEventListener("click", closeQrScanner);
+  els.qrTabScan?.addEventListener("click", () => setQrModalTab("scan"));
+  els.qrTabMy?.addEventListener("click", () => setQrModalTab("my"));
+  els.qrTorchBtn?.addEventListener("click", toggleQrTorch);
+  els.qrScanner?.addEventListener("touchstart", (event) => {
+    state.qrSwipeStartX = event.touches?.[0]?.clientX || 0;
+  });
+  els.qrScanner?.addEventListener("touchend", (event) => {
+    const endX = event.changedTouches?.[0]?.clientX || 0;
+    const delta = endX - state.qrSwipeStartX;
+    if (Math.abs(delta) < 60) return;
+    setQrModalTab(delta < 0 ? "my" : "scan");
+  });
   els.qrScanner.addEventListener("click", (event) => {
     if (event.target === els.qrScanner) closeQrScanner();
   });
   els.startChatBtn.addEventListener("click", openSearchPage);
   els.emptyStartChatBtn.addEventListener("click", openSearchPage);
+  els.pickContactBtn?.addEventListener("click", pickPhoneContact);
   els.openCreateGroupBtn.addEventListener("click", () => {
     renderGroupMemberPicker();
     els.createGroupForm.hidden = !els.createGroupForm.hidden;
@@ -2741,6 +3574,9 @@ function bindEvents() {
   els.backHomeBtn.addEventListener("click", backToHome);
   els.openReceiverProfileBtn.addEventListener("click", () => openReceiverProfileScreen(state.activeReceiver));
   els.receiverProfileBackBtn.addEventListener("click", backToChatFromReceiverProfile);
+  els.contactNameForm.addEventListener("submit", saveContactName);
+  els.starFriendBtn?.addEventListener("click", toggleStarFriend);
+  els.profileClearChatBtn?.addEventListener("click", openClearChatConfirm);
   els.fullUserAvatar.addEventListener("click", () => {
     const title = els.fullUserName.textContent || "Profile photo";
     openProfilePreview({
@@ -2760,9 +3596,19 @@ function bindEvents() {
   els.blockUserBtn.addEventListener("click", toggleBlockActiveUser);
   els.messageForm.addEventListener("submit", handleSendMessage);
   els.messagePhotoInput.addEventListener("change", handleSendPhoto);
+  els.messageCameraInput.addEventListener("change", () => handleSendPhoto(els.messageCameraInput));
   els.messageFileInput.addEventListener("change", handleSendFiles);
+  els.chatWallpaperImageInput?.addEventListener("change", () => {
+    const file = els.chatWallpaperImageInput.files?.[0];
+    els.chatWallpaperImageInput.value = "";
+    if (file) setPersonalChatWallpaper(file);
+  });
   els.attachMenuBtn.addEventListener("click", () => {
     els.attachActions.hidden = false;
+  });
+  els.attachCameraBtn.addEventListener("click", () => {
+    els.attachActions.hidden = true;
+    els.messageCameraInput.click();
   });
   els.attachImageBtn.addEventListener("click", () => {
     els.attachActions.hidden = true;
@@ -2778,24 +3624,55 @@ function bindEvents() {
   els.attachActions.addEventListener("click", (event) => {
     if (event.target === els.attachActions) els.attachActions.hidden = true;
   });
-  els.chatMenuBtn.addEventListener("click", () => {
+  els.chatMenuBtn.addEventListener("click", (event) => {
     const pinned = Boolean(state.currentProfile?.pinnedChats?.[state.activeChatId]);
     els.chatMenuPinBtn.textContent = pinned ? "Unpin chat" : "Pin chat";
-    els.chatMenuActions.hidden = false;
+    els.chatMenuMuteBtn.textContent = isMutedChat(state.activeChatId) ? "Unmute chat" : "Mute chat";
+    els.chatMenuWallpaperBtn.textContent = hasPersonalChatWallpaper() ? "Change wallpaper" : "Set chat wallpaper";
+    positionFloatingSheet(els.chatMenuActions, event.currentTarget, "bottom");
   });
   els.chatMenuPinBtn.addEventListener("click", () => {
     togglePinChat(state.activeChatId);
-    els.chatMenuActions.hidden = true;
+    closeFloatingSheet(els.chatMenuActions);
+  });
+  els.chatMenuMuteBtn.addEventListener("click", () => {
+    toggleMuteChat(state.activeChatId);
+    closeFloatingSheet(els.chatMenuActions);
+  });
+  els.chatMenuWallpaperBtn.addEventListener("click", () => {
+    closeFloatingSheet(els.chatMenuActions);
+    openChatWallpaperActions();
+  });
+  els.wallpaperChangeBtn?.addEventListener("click", () => {
+    els.wallpaperActions.hidden = true;
+    els.chatWallpaperImageInput.click();
+  });
+  els.wallpaperDeleteBtn?.addEventListener("click", () => {
+    els.wallpaperActions.hidden = true;
+    clearPersonalChatWallpaper();
+  });
+  els.wallpaperCancelBtn?.addEventListener("click", () => {
+    els.wallpaperActions.hidden = true;
+  });
+  els.wallpaperActions?.addEventListener("click", (event) => {
+    if (event.target === els.wallpaperActions) els.wallpaperActions.hidden = true;
+  });
+  els.clearChatConfirmBtn?.addEventListener("click", confirmClearActiveChat);
+  els.clearChatCancelBtn?.addEventListener("click", () => {
+    els.clearChatConfirm.hidden = true;
+  });
+  els.clearChatConfirm?.addEventListener("click", (event) => {
+    if (event.target === els.clearChatConfirm) els.clearChatConfirm.hidden = true;
   });
   els.chatMenuProfileBtn.addEventListener("click", () => {
-    els.chatMenuActions.hidden = true;
+    closeFloatingSheet(els.chatMenuActions);
     openReceiverProfileScreen(state.activeReceiver);
   });
   els.chatMenuCancelBtn.addEventListener("click", () => {
-    els.chatMenuActions.hidden = true;
+    closeFloatingSheet(els.chatMenuActions);
   });
   els.chatMenuActions.addEventListener("click", (event) => {
-    if (event.target === els.chatMenuActions) els.chatMenuActions.hidden = true;
+    if (event.target === els.chatMenuActions) closeFloatingSheet(els.chatMenuActions);
   });
   els.messageInput.addEventListener("input", handleTypingInput);
   els.cancelReplyBtn.addEventListener("click", clearReply);
@@ -2886,11 +3763,16 @@ function bindEvents() {
 bindEvents();
 bindPresenceEvents();
 bindScrollClickGuard();
-showScreen(els.loadingScreen);
+loadAppConfig();
+window.addEventListener("popstate", (event) => {
+  if (!event.state?.zopchat) return;
+  handleAppBackTo(event.state.screenId || "home");
+});
+showScreen(els.loadingScreen, { replaceHistory: true });
 onAuthStateChanged(auth, (user) => {
   routeForUser(user).catch((error) => {
     console.error(error);
     showToast("Could not load your account.", "error");
-    showScreen(els.loginScreen);
+    showScreen(els.loginScreen, { replaceHistory: true });
   });
 });

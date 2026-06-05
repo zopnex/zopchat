@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="theme-color" content="#0f9f7a" />
+    <title>ZopChat Admin</title>
+    <style>
+      :root {
+        --bg: #f4f7f5;
+        --panel: #ffffff;
+        --ink: #10201c;
+        --muted: #687772;
+        --line: #dce7e2;
+        --accent: #0f9f7a;
+        --danger: #c73c3c;
+        font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      }
+
+      * { box-sizing: border-box; }
+
+      body {
+        margin: 0;
+        min-height: 100vh;
+        background: linear-gradient(145deg, #fbfdfc, var(--bg));
+        color: var(--ink);
+      }
+
+      header {
+        position: sticky;
+        top: 0;
+        z-index: 2;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        padding: 16px;
+        background: rgba(255, 255, 255, 0.92);
+        border-bottom: 1px solid var(--line);
+        backdrop-filter: blur(12px);
+      }
+
+      h1, h2, h3, p { margin: 0; }
+
+      main {
+        width: min(100%, 960px);
+        margin: 0 auto;
+        display: grid;
+        gap: 16px;
+        padding: 16px;
+      }
+
+      .brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+
+      .mark {
+        width: 42px;
+        height: 42px;
+        display: grid;
+        place-items: center;
+        border-radius: 12px;
+        background: var(--accent);
+        color: white;
+        font-weight: 900;
+      }
+
+      button, input, textarea {
+        font: inherit;
+      }
+
+      button {
+        border: 0;
+        cursor: pointer;
+      }
+
+      .primary, .secondary {
+        min-height: 42px;
+        border-radius: 999px;
+        padding: 0 16px;
+        font-weight: 850;
+      }
+
+      .primary {
+        background: var(--accent);
+        color: white;
+      }
+
+      .secondary {
+        background: #eef8f4;
+        color: #08785d;
+      }
+
+      .card {
+        display: grid;
+        gap: 14px;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 16px;
+        background: var(--panel);
+        box-shadow: 0 10px 30px rgba(16, 32, 28, 0.07);
+      }
+
+      label {
+        display: grid;
+        gap: 6px;
+        color: var(--muted);
+        font-size: 0.86rem;
+        font-weight: 800;
+      }
+
+      input, textarea {
+        width: 100%;
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        padding: 12px;
+        background: #fbfdfc;
+        color: var(--ink);
+      }
+
+      textarea {
+        min-height: 96px;
+        resize: vertical;
+      }
+
+      .grid {
+        display: grid;
+        gap: 12px;
+      }
+
+      .stats {
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      }
+
+      .stat {
+        padding: 14px;
+        border-radius: 14px;
+        background: #eef8f4;
+      }
+
+      .stat strong {
+        display: block;
+        font-size: 1.8rem;
+      }
+
+      .user-list {
+        display: grid;
+        gap: 10px;
+      }
+
+      .user-row {
+        display: grid;
+        grid-template-columns: 44px 1fr auto;
+        align-items: center;
+        gap: 10px;
+        padding: 10px;
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        background: #fbfdfc;
+      }
+
+      .user-row img {
+        width: 44px;
+        height: 44px;
+        border-radius: 50%;
+        object-fit: cover;
+      }
+
+      .user-row span {
+        color: var(--muted);
+        font-size: 0.84rem;
+      }
+
+      .badge {
+        color: var(--accent);
+        font-size: 0.8rem;
+        font-weight: 900;
+      }
+
+      .notice {
+        color: var(--muted);
+        line-height: 1.45;
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand">
+        <div class="mark">Z</div>
+        <div>
+          <h1>ZopChat Admin</h1>
+          <p class="notice">Share link control and user view.</p>
+        </div>
+      </div>
+      <button class="secondary" id="login-btn" type="button">Login</button>
+    </header>
+
+    <main>
+      <section class="card">
+        <h2>Share Button Control</h2>
+        <label>
+          Download link
+          <input id="download-url" placeholder="https://example.com/zopchat.apk" />
+        </label>
+        <label>
+          Share text
+          <textarea id="share-text">Join me on ZopChat so we can chat faster and privately.</textarea>
+        </label>
+        <button class="primary" id="save-config-btn" type="button">Save Share Settings</button>
+        <p class="notice">This controls the app share button in index.html after Firestore rules are published.</p>
+      </section>
+
+      <section class="grid stats">
+        <div class="stat"><span>Total users</span><strong id="total-users">0</strong></div>
+        <div class="stat"><span>Online users</span><strong id="online-users">0</strong></div>
+        <div class="stat"><span>Completed profiles</span><strong id="complete-users">0</strong></div>
+      </section>
+
+      <section class="card">
+        <h2>Users</h2>
+        <div class="user-list" id="user-list">
+          <p class="notice">Login to load users.</p>
+        </div>
+      </section>
+    </main>
+
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-app.js";
+      import { GoogleAuthProvider, getAuth, onAuthStateChanged, signInWithPopup, signOut } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-auth.js";
+      import { collection, doc, getDoc, getDocs, getFirestore, serverTimestamp, setDoc } from "https://www.gstatic.com/firebasejs/10.12.5/firebase-firestore.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyChs8QUVGh_U9VmuDBWFZp8UFX4OgVJ7uM",
+        authDomain: "zopchat-ts.firebaseapp.com",
+        databaseURL: "https://zopchat-ts-default-rtdb.firebaseio.com",
+        projectId: "zopchat-ts",
+        storageBucket: "zopchat-ts.firebasestorage.app",
+        messagingSenderId: "154212898819",
+        appId: "1:154212898819:web:02a77e734ba577e09dd636",
+        measurementId: "G-K71N2GRTX3",
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const db = getFirestore(app);
+      const provider = new GoogleAuthProvider();
+
+      const $ = (id) => document.getElementById(id);
+      const fallbackAvatar = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='88' height='88'%3E%3Crect width='88' height='88' rx='44' fill='%23eef8f4'/%3E%3Ccircle cx='44' cy='35' r='16' fill='%230f9f7a'/%3E%3Cpath d='M18 78c5-18 16-28 26-28s21 10 26 28' fill='%230f9f7a'/%3E%3C/svg%3E";
+
+      function escapeHtml(value) {
+        return String(value || "")
+          .replaceAll("&", "&amp;")
+          .replaceAll("<", "&lt;")
+          .replaceAll(">", "&gt;")
+          .replaceAll('"', "&quot;")
+          .replaceAll("'", "&#039;");
+      }
+
+      async function loadConfig() {
+        const snap = await getDoc(doc(db, "appConfig", "share"));
+        if (!snap.exists()) return;
+        const data = snap.data();
+        $("download-url").value = data.downloadUrl || "";
+        $("share-text").value = data.shareText || "";
+      }
+
+      async function saveConfig() {
+        await setDoc(
+          doc(db, "appConfig", "share"),
+          {
+            downloadUrl: $("download-url").value.trim(),
+            shareText: $("share-text").value.trim(),
+            updatedAt: serverTimestamp(),
+            updatedBy: auth.currentUser?.uid || "",
+          },
+          { merge: true },
+        );
+        alert("Share settings saved.");
+      }
+
+      async function loadUsers() {
+        const snap = await getDocs(collection(db, "users"));
+        const users = snap.docs.map((userDoc) => ({ uid: userDoc.id, ...userDoc.data() }));
+        $("total-users").textContent = `${users.length}`;
+        $("online-users").textContent = `${users.filter((user) => user.online).length}`;
+        $("complete-users").textContent = `${users.filter((user) => user.isProfileComplete).length}`;
+        $("user-list").innerHTML = users
+          .sort((a, b) => String(a.name || "").localeCompare(String(b.name || "")))
+          .map(
+            (user) => `
+              <div class="user-row">
+                <img src="${escapeHtml(user.photoURL || fallbackAvatar)}" alt="" />
+                <div>
+                  <strong>${escapeHtml(user.name || "ZopChat User")}</strong><br />
+                  <span>${escapeHtml(user.mobile || user.email || user.uid)}</span>
+                </div>
+                <div class="badge">${user.online ? "ONLINE" : "USER"}</div>
+              </div>
+            `,
+          )
+          .join("");
+      }
+
+      $("login-btn").addEventListener("click", async () => {
+        if (auth.currentUser) {
+          await signOut(auth);
+          return;
+        }
+        await signInWithPopup(auth, provider);
+      });
+
+      $("save-config-btn").addEventListener("click", saveConfig);
+
+      onAuthStateChanged(auth, async (user) => {
+        $("login-btn").textContent = user ? "Logout" : "Login";
+        if (!user) return;
+        await loadConfig();
+        await loadUsers();
+      });
+    </script>
+  </body>
+</html>
