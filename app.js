@@ -98,7 +98,14 @@ const state = {
   qrDetector: null,
   qrTorchOn: false,
   qrSwipeStartX: 0,
+  qrSwipeStartY: 0,
+  qrSwipeDeltaX: 0,
+  qrActiveTab: "scan",
   selectedStatusSong: null,
+  statusPreviewImageUrl: "",
+  statusPreviewAudio: null,
+  visibleStatuses: [],
+  activeStatusIndex: 0,
   homeTab: "chats",
   statuses: [],
   unsubStatuses: null,
@@ -176,6 +183,8 @@ const els = {
   qrBtn: $("qr-btn"),
   qrCard: $("qr-card"),
   profileQr: $("profile-qr"),
+  profileQrShareBtn: $("profile-qr-share-btn"),
+  profileQrDownloadBtn: $("profile-qr-download-btn"),
   wallpaperBtn: $("wallpaper-btn"),
   wallpaperForm: $("wallpaper-form"),
   wallpaperSelect: $("wallpaper-select"),
@@ -198,6 +207,11 @@ const els = {
   statusSongSearchBtn: $("status-song-search-btn"),
   selectedSong: $("selected-song"),
   songResults: $("song-results"),
+  statusPreviewPanel: $("status-preview-panel"),
+  statusPreviewMedia: $("status-preview-media"),
+  statusOverlayInput: $("status-overlay-input"),
+  statusDrawInput: $("status-draw-input"),
+  statusPrivacySelect: $("status-privacy-select"),
   statusList: $("status-list"),
   emptyStatus: $("empty-status"),
   scanQrBtn: $("scan-qr-btn"),
@@ -209,7 +223,11 @@ const els = {
   qrTabMy: $("qr-tab-my"),
   qrScanPane: $("qr-scan-pane"),
   qrMyPane: $("qr-my-pane"),
+  qrPaneSlider: $("qr-pane-slider"),
+  qrPaneTrack: $("qr-pane-track"),
   qrModalProfileQr: $("qr-modal-profile-qr"),
+  qrModalShareBtn: $("qr-modal-share-btn"),
+  qrModalDownloadBtn: $("qr-modal-download-btn"),
   qrTorchBtn: $("qr-torch-btn"),
   startChatBtn: $("start-chat-btn"),
   emptyStartChatBtn: $("empty-start-chat-btn"),
@@ -562,6 +580,25 @@ function timestampMillis(value) {
   return date && !Number.isNaN(date.getTime()) ? date.getTime() : 0;
 }
 
+function canViewStatus(status) {
+  if (status.uid === state.currentUser?.uid) return true;
+  const privacy = status.privacy || "contacts";
+  if (privacy === "everyone") return true;
+  if (privacy === "contacts") {
+    const chat = state.chats.find((c) => c.other?.uid === status.uid);
+    return Boolean(chat);
+  }
+  return false;
+}
+
+function hasSeenStatus(status) {
+  return Boolean(status.seenBy?.[state.currentUser?.uid]);
+}
+
+function statusSeenCount(status) {
+  return Object.keys(status.seenBy || {}).length;
+}
+
 function escapeHtml(value) {
   return String(value || "")
     .replaceAll("&", "&amp;")
@@ -678,6 +715,30 @@ function populateHomeProfile(profile) {
 function profileQrUrl(profile = state.currentProfile) {
   const data = `zopchat:user:${profile?.mobile || profile?.uid || ""}`;
   return `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(data)}`;
+}
+
+async function shareProfileQr() {
+  const text = `Scan my ZopChat QR to start chatting. ${profileQrUrl()}`;
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "My ZopChat QR", text });
+      return;
+    } catch (error) {
+      if (error?.name === "AbortError") return;
+    }
+  }
+  await navigator.clipboard?.writeText(text);
+  showToast("QR link copied.");
+}
+
+function downloadProfileQr() {
+  const link = document.createElement("a");
+  link.href = profileQrUrl();
+  link.download = "zopchat-qr.png";
+  link.rel = "noopener";
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
 }
 
 function renderSettings(profile = state.currentProfile) {
@@ -1224,7 +1285,9 @@ function updateHomeBadges() {
   const expiry = Date.now() - 24 * 60 * 60 * 1000;
   const contactUids = new Set(state.chats.flatMap((chat) => chat.members || []));
   contactUids.delete(state.currentUser?.uid);
-  const statusCount = state.statuses.filter((status) => contactUids.has(status.uid) && timestampMillis(status.createdAt) >= expiry).length;
+  const statusCount = state.statuses.filter((status) => {
+    return contactUids.has(status.uid) && timestampMillis(status.createdAt) >= expiry && canViewStatus(status) && !hasSeenStatus(status);
+  }).length;
   if (els.homeStatusBadge) {
     els.homeStatusBadge.hidden = statusCount <= 0;
     els.homeStatusBadge.textContent = statusCount > 99 ? "99+" : String(statusCount);
@@ -1303,8 +1366,9 @@ function renderStatuses() {
   contactUids.add(state.currentUser?.uid);
   const expiry = Date.now() - 24 * 60 * 60 * 1000;
   const visible = state.statuses
-    .filter((status) => contactUids.has(status.uid) && timestampMillis(status.createdAt) >= expiry)
+    .filter((status) => contactUids.has(status.uid) && timestampMillis(status.createdAt) >= expiry && canViewStatus(status))
     .sort((a, b) => timestampMillis(b.createdAt) - timestampMillis(a.createdAt));
+  state.visibleStatuses = visible;
 
   els.emptyStatus.hidden = visible.length > 0;
   els.statusList.innerHTML = visible
@@ -1312,14 +1376,23 @@ function renderStatuses() {
       const chat = state.chats.find((item) => item.other?.uid === status.uid);
       const isMine = status.uid === state.currentUser?.uid;
       const profile = isMine ? state.currentProfile : chat?.other;
+      const seenMeta = isMine ? `Seen by ${statusSeenCount(status)}` : hasSeenStatus(status) ? "" : "New";
+      const summary = status.imageURL
+        ? status.songTitle
+          ? `${status.songTitle} - Photo`
+          : "Photo status"
+        : status.audioURL
+          ? status.songTitle || "Song status"
+          : status.text || status.overlayText || status.drawText || "";
       return `
         <div class="status-item" data-status-id="${escapeHtml(status.id)}">
           <img src="${escapeHtml(profile?.photoURL || DEFAULT_AVATAR)}" alt="" />
           <div>
             <h4>${escapeHtml(isMine ? "My status" : contactDisplayName(profile))}</h4>
-            <p>${escapeHtml(status.imageURL ? status.songTitle ? `${status.songTitle} • Photo` : "Photo status" : status.audioURL ? status.songTitle || "Song status" : status.text || "")}</p>
-            <span>${escapeHtml(formatTime(status.createdAt))}</span>
+            <p>${escapeHtml(summary)}</p>
+            <span>${escapeHtml(formatTime(status.createdAt))}${seenMeta ? ` - ${escapeHtml(seenMeta)}` : ""}</span>
           </div>
+          ${!isMine && !hasSeenStatus(status) ? `<span class="status-new-dot" aria-hidden="true"></span>` : ""}
           ${isMine ? `<button class="text-btn danger" data-delete-status="${escapeHtml(status.id)}" type="button">Delete</button>` : ""}
         </div>
       `;
@@ -1340,25 +1413,34 @@ function renderStatuses() {
 async function createStatus(event) {
   event.preventDefault();
   const text = els.statusInput.value.trim();
+  const overlayText = els.statusOverlayInput?.value.trim() || "";
+  const drawText = els.statusDrawInput?.value.trim() || "";
   const imageFile = els.statusImageInput?.files?.[0] || null;
   const song = state.selectedStatusSong;
-  if ((!text && !imageFile && !song) || !state.currentUser) return;
+  if ((!text && !overlayText && !drawText && !imageFile && !song) || !state.currentUser) return;
   let imageURL = "";
   if (imageFile) imageURL = await uploadImageToCloudinary(imageFile);
   await addDoc(collection(db, "statuses"), {
     uid: state.currentUser.uid,
     text,
+    overlayText,
+    drawText,
     imageURL,
     audioURL: song?.previewUrl || "",
     songTitle: song?.trackName || "",
     songArtist: song?.artistName || "",
     songArtwork: song?.artworkUrl100 || "",
     songViewUrl: song?.trackViewUrl || "",
+    privacy: els.statusPrivacySelect?.value || "contacts",
+    seenBy: {},
     createdAt: serverTimestamp(),
   });
   els.statusInput.value = "";
+  if (els.statusOverlayInput) els.statusOverlayInput.value = "";
+  if (els.statusDrawInput) els.statusDrawInput.value = "";
   if (els.statusImageInput) els.statusImageInput.value = "";
   clearSelectedStatusSong();
+  renderStatusDraftPreview();
   showToast("Status posted.");
 }
 
@@ -1371,6 +1453,14 @@ async function deleteStatus(id) {
 function openStatusViewer(id) {
   const status = state.statuses.find((item) => item.id === id);
   if (!status || !els.statusViewer) return;
+  state.activeStatusIndex = Math.max(0, state.visibleStatuses.findIndex((item) => item.id === id));
+  renderStatusViewer(status);
+  els.statusViewer.hidden = false;
+  markStatusSeen(status);
+}
+
+function renderStatusViewer(status) {
+  if (!status || !els.statusViewerBody) return;
   const chat = state.chats.find((item) => item.other?.uid === status.uid);
   const isMine = status.uid === state.currentUser?.uid;
   const profile = isMine ? state.currentProfile : chat?.other;
@@ -1379,23 +1469,41 @@ function openStatusViewer(id) {
     <div class="status-viewer-head">
       <img src="${escapeHtml(profile?.photoURL || DEFAULT_AVATAR)}" alt="" />
       <div><strong>${escapeHtml(isMine ? "My status" : contactDisplayName(profile))}</strong><span>${escapeHtml(formatTime(status.createdAt))}</span></div>
+      ${isMine ? `<small class="status-seen-count">Seen by ${statusSeenCount(status)}</small>` : ""}
     </div>
     <div class="status-viewer-content">
       ${status.imageURL ? `<img src="${escapeHtml(status.imageURL)}" alt="Status photo" />` : ""}
       ${status.audioURL ? `<div class="status-song-card">${status.songArtwork ? `<img src="${escapeHtml(status.songArtwork)}" alt="" />` : ""}<div><strong>${escapeHtml(status.songTitle || "Song")}</strong><span>${escapeHtml(status.songArtist || "Online song")}</span><small>Preview courtesy of iTunes</small></div></div><audio src="${escapeHtml(status.audioURL)}" controls autoplay></audio>` : ""}
       ${status.text ? `<p>${escapeHtml(status.text)}</p>` : ""}
+      ${status.overlayText ? `<p class="status-overlay-text">${escapeHtml(status.overlayText)}</p>` : ""}
+      ${status.drawText ? `<p class="status-draw-text">${escapeHtml(status.drawText)}</p>` : ""}
     </div>
   `;
-  els.statusViewer.hidden = false;
+  els.statusViewerBody.querySelector("audio")?.play?.().catch(() => {});
+}
+
+async function markStatusSeen(status) {
+  const uid = state.currentUser?.uid;
+  if (!uid || !status?.id || status.uid === uid || hasSeenStatus(status)) return;
+  try {
+    await updateDoc(doc(db, "statuses", status.id), {
+      [`seenBy.${uid}`]: serverTimestamp(),
+    });
+  } catch (error) {
+    console.error(error);
+  }
 }
 
 function clearSelectedStatusSong() {
   state.selectedStatusSong = null;
+  state.statusPreviewAudio?.pause?.();
+  state.statusPreviewAudio = null;
   if (els.selectedSong) {
     els.selectedSong.hidden = true;
     els.selectedSong.innerHTML = "";
   }
   if (els.songResults) els.songResults.innerHTML = "";
+  renderStatusDraftPreview();
 }
 
 function renderSelectedStatusSong(song) {
@@ -1403,10 +1511,37 @@ function renderSelectedStatusSong(song) {
   els.selectedSong.hidden = false;
   els.selectedSong.innerHTML = `
     ${song.artworkUrl100 ? `<img src="${escapeHtml(song.artworkUrl100)}" alt="" />` : ""}
-    <div><strong>${escapeHtml(song.trackName || "Song")}</strong><span>${escapeHtml(song.artistName || "")}</span></div>
+    <div><strong>${escapeHtml(song.trackName || "Song")}</strong><span>${escapeHtml(song.artistName || "")}</span>${song.previewUrl ? `<audio src="${escapeHtml(song.previewUrl)}" controls autoplay></audio>` : ""}</div>
     <button class="text-btn danger" id="remove-status-song-btn" type="button">Remove</button>
   `;
   $("remove-status-song-btn")?.addEventListener("click", clearSelectedStatusSong);
+  renderStatusDraftPreview();
+}
+
+function renderStatusDraftPreview() {
+  if (!els.statusPreviewPanel || !els.statusPreviewMedia) return;
+  if (state.statusPreviewImageUrl) URL.revokeObjectURL(state.statusPreviewImageUrl);
+  const file = els.statusImageInput?.files?.[0] || null;
+  state.statusPreviewImageUrl = file ? URL.createObjectURL(file) : "";
+  const song = state.selectedStatusSong;
+  const text = els.statusInput?.value.trim() || "";
+  const overlayText = els.statusOverlayInput?.value.trim() || "";
+  const drawText = els.statusDrawInput?.value.trim() || "";
+  els.statusPreviewPanel.hidden = !state.statusPreviewImageUrl && !song && !text && !overlayText && !drawText;
+  if (els.statusPreviewPanel.hidden) {
+    els.statusPreviewMedia.innerHTML = "";
+    return;
+  }
+  els.statusPreviewMedia.innerHTML = `
+    <div class="status-preview-stage">
+      ${state.statusPreviewImageUrl ? `<img src="${escapeHtml(state.statusPreviewImageUrl)}" alt="Status preview" />` : ""}
+      ${text ? `<p>${escapeHtml(text)}</p>` : ""}
+      ${overlayText ? `<p class="status-overlay-text">${escapeHtml(overlayText)}</p>` : ""}
+      ${drawText ? `<p class="status-draw-text">${escapeHtml(drawText)}</p>` : ""}
+      ${song ? `<div class="status-song-card floating">${song.artworkUrl100 ? `<img src="${escapeHtml(song.artworkUrl100)}" alt="" />` : ""}<div><strong>${escapeHtml(song.trackName || "Song")}</strong><span>${escapeHtml(song.artistName || "")}</span></div></div><audio src="${escapeHtml(song.previewUrl)}" controls autoplay></audio>` : ""}
+    </div>
+  `;
+  els.statusPreviewMedia.querySelector("audio")?.play?.().catch(() => {});
 }
 
 async function searchOnlineStatusSongs() {
@@ -1422,17 +1557,33 @@ async function searchOnlineStatusSongs() {
       ? songs
           .map(
             (song, index) => `
-        <button class="song-result" type="button" data-song-index="${index}">
+        <div class="song-result" data-song-index="${index}">
           ${song.artworkUrl100 ? `<img src="${escapeHtml(song.artworkUrl100)}" alt="" />` : ""}
           <span><strong>${escapeHtml(song.trackName || "Song")}</strong><small>${escapeHtml(song.artistName || "")}</small></span>
-        </button>
+          <div class="song-result-actions">
+            <button class="secondary-btn compact" type="button" data-preview-song="${index}">Preview</button>
+            <button class="primary-btn compact" type="button" data-use-song="${index}">Use</button>
+          </div>
+        </div>
       `,
           )
           .join("")
       : `<p class="muted">No online song found.</p>`;
-    els.songResults.querySelectorAll("[data-song-index]").forEach((button) => {
-      button.addEventListener("click", () => {
-        state.selectedStatusSong = songs[Number(button.dataset.songIndex)];
+    els.songResults.querySelectorAll("[data-preview-song]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const song = songs[Number(button.dataset.previewSong)];
+        if (!song?.previewUrl) return;
+        state.statusPreviewAudio?.pause?.();
+        state.statusPreviewAudio = new Audio(song.previewUrl);
+        state.statusPreviewAudio.play().catch(() => showToast("Preview blocked. Tap again.", "error"));
+      });
+    });
+    els.songResults.querySelectorAll("[data-use-song]").forEach((button) => {
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        state.statusPreviewAudio?.pause?.();
+        state.selectedStatusSong = songs[Number(button.dataset.useSong)];
         renderSelectedStatusSong(state.selectedStatusSong);
         els.songResults.innerHTML = "";
       });
@@ -1705,6 +1856,7 @@ function parseZopChatQr(value) {
 }
 
 async function handleQrScanValue(value) {
+  navigator.vibrate?.(70);
   const scanned = parseZopChatQr(value);
   const mobile = normalizeMobile(scanned);
 
@@ -1781,10 +1933,12 @@ function closeQrScanner() {
 
 function setQrModalTab(tab) {
   const scan = tab === "scan";
+  state.qrActiveTab = scan ? "scan" : "my";
   els.qrTabScan?.classList.toggle("active", scan);
   els.qrTabMy?.classList.toggle("active", !scan);
-  if (els.qrScanPane) els.qrScanPane.hidden = !scan;
-  if (els.qrMyPane) els.qrMyPane.hidden = scan;
+  els.qrScanner?.classList.toggle("qr-my-active", !scan);
+  els.qrPaneTrack?.classList.toggle("show-my", !scan);
+  els.qrPaneTrack?.style.setProperty("--swipe-offset", "0px");
 }
 
 async function toggleQrTorch() {
@@ -3469,6 +3623,8 @@ function bindEvents() {
   els.qrBtn.addEventListener("click", () => {
     els.qrCard.hidden = !els.qrCard.hidden;
   });
+  els.profileQrShareBtn?.addEventListener("click", shareProfileQr);
+  els.profileQrDownloadBtn?.addEventListener("click", downloadProfileQr);
   $("profile-qr-shortcut")?.addEventListener("click", () => {
     els.qrCard.hidden = false;
     els.qrCard.scrollIntoView({ behavior: "smooth", block: "center" });
@@ -3515,7 +3671,11 @@ function bindEvents() {
       els.statusSongPanel.hidden = false;
       els.statusSongSearch.focus();
     }
+    renderStatusDraftPreview();
   });
+  els.statusInput?.addEventListener("input", renderStatusDraftPreview);
+  els.statusOverlayInput?.addEventListener("input", renderStatusDraftPreview);
+  els.statusDrawInput?.addEventListener("input", renderStatusDraftPreview);
   els.statusSongBtn?.addEventListener("click", () => {
     els.statusSongPanel.hidden = !els.statusSongPanel.hidden;
     if (!els.statusSongPanel.hidden) els.statusSongSearch.focus();
@@ -3542,15 +3702,30 @@ function bindEvents() {
   els.closeQrScannerBtn.addEventListener("click", closeQrScanner);
   els.qrTabScan?.addEventListener("click", () => setQrModalTab("scan"));
   els.qrTabMy?.addEventListener("click", () => setQrModalTab("my"));
+  els.qrModalShareBtn?.addEventListener("click", shareProfileQr);
+  els.qrModalDownloadBtn?.addEventListener("click", downloadProfileQr);
   els.qrTorchBtn?.addEventListener("click", toggleQrTorch);
-  els.qrScanner?.addEventListener("touchstart", (event) => {
+  els.qrPaneSlider?.addEventListener("touchstart", (event) => {
     state.qrSwipeStartX = event.touches?.[0]?.clientX || 0;
+    state.qrSwipeStartY = event.touches?.[0]?.clientY || 0;
+    state.qrSwipeDeltaX = 0;
+    els.qrPaneTrack?.classList.add("dragging");
   });
-  els.qrScanner?.addEventListener("touchend", (event) => {
-    const endX = event.changedTouches?.[0]?.clientX || 0;
-    const delta = endX - state.qrSwipeStartX;
-    if (Math.abs(delta) < 60) return;
-    setQrModalTab(delta < 0 ? "my" : "scan");
+  els.qrPaneSlider?.addEventListener("touchmove", (event) => {
+    const touch = event.touches?.[0];
+    if (!touch) return;
+    const deltaX = touch.clientX - state.qrSwipeStartX;
+    const deltaY = touch.clientY - state.qrSwipeStartY;
+    if (Math.abs(deltaY) > Math.abs(deltaX)) return;
+    event.preventDefault();
+    state.qrSwipeDeltaX = deltaX;
+    els.qrPaneTrack?.style.setProperty("--swipe-offset", `${Math.max(-96, Math.min(96, deltaX))}px`);
+  });
+  els.qrPaneSlider?.addEventListener("touchend", () => {
+    els.qrPaneTrack?.classList.remove("dragging");
+    els.qrPaneTrack?.style.setProperty("--swipe-offset", "0px");
+    if (Math.abs(state.qrSwipeDeltaX) < 58) return;
+    setQrModalTab(state.qrSwipeDeltaX < 0 ? "my" : "scan");
   });
   els.qrScanner.addEventListener("click", (event) => {
     if (event.target === els.qrScanner) closeQrScanner();

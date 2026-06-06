@@ -211,6 +211,21 @@
             <div class="selected-song" id="selected-song" hidden></div>
             <div class="song-results" id="song-results"></div>
           </section>
+          <section class="status-preview-panel" id="status-preview-panel" hidden>
+            <div class="status-preview-media" id="status-preview-media"></div>
+            <div class="status-extra-tools">
+              <input id="status-overlay-input" maxlength="80" placeholder="Extra text on status" />
+              <input id="status-draw-input" maxlength="50" placeholder="Draw style text" />
+            </div>
+            <label>
+              <span>Status privacy</span>
+              <select id="status-privacy-select">
+                <option value="contacts">My contacts</option>
+                <option value="starred">Star friends only</option>
+                <option value="onlyMe">Only me</option>
+              </select>
+            </label>
+          </section>
           <div class="section-title">
             <h3>Recent status</h3>
           </div>
@@ -397,6 +412,10 @@
             <div class="qr-card" id="qr-card" hidden>
               <img id="profile-qr" alt="Profile QR code" />
               <p>Share this QR to start a ZopChat chat.</p>
+              <div class="qr-card-actions">
+                <button class="secondary-btn compact" id="profile-qr-share-btn" type="button">Share QR</button>
+                <button class="primary-btn compact" id="profile-qr-download-btn" type="button">Download</button>
+              </div>
             </div>
             <button class="setting-link" id="wallpaper-btn" type="button">Chat wallpaper</button>
             <form class="privacy-panel" id="wallpaper-form" hidden>
@@ -595,19 +614,28 @@
           <button class="active" id="qr-tab-scan" type="button">Scan QR</button>
           <button id="qr-tab-my" type="button">My QR code</button>
         </div>
-        <div class="qr-scan-pane" id="qr-scan-pane">
-          <div class="qr-video-wrap">
-            <video id="qr-scan-video" playsinline muted></video>
-            <div class="qr-frame" aria-hidden="true"></div>
+        <p class="qr-swipe-hint">Swipe left or right to switch</p>
+        <div class="qr-pane-slider" id="qr-pane-slider">
+          <div class="qr-pane-track" id="qr-pane-track">
+            <div class="qr-pane qr-scan-pane" id="qr-scan-pane">
+              <div class="qr-video-wrap">
+                <video id="qr-scan-video" playsinline muted></video>
+                <div class="qr-frame" aria-hidden="true"></div>
+              </div>
+              <div class="qr-scan-actions">
+                <p id="qr-scan-status">Scan Zop Chat QR code.</p>
+                <button class="secondary-btn compact" id="qr-torch-btn" type="button">Torch</button>
+              </div>
+            </div>
+            <div class="qr-pane qr-my-pane" id="qr-my-pane">
+              <img id="qr-modal-profile-qr" alt="Your ZopChat QR code" />
+              <p>Share this QR to start a ZopChat chat.</p>
+              <div class="qr-card-actions">
+                <button class="secondary-btn compact" id="qr-modal-share-btn" type="button">Share QR</button>
+                <button class="primary-btn compact" id="qr-modal-download-btn" type="button">Download</button>
+              </div>
+            </div>
           </div>
-          <div class="qr-scan-actions">
-            <p id="qr-scan-status">Scan Zop Chat QR code.</p>
-            <button class="secondary-btn compact" id="qr-torch-btn" type="button">Torch</button>
-          </div>
-        </div>
-        <div class="qr-my-pane" id="qr-my-pane" hidden>
-          <img id="qr-modal-profile-qr" alt="Your ZopChat QR code" />
-          <p>Share this QR to start a ZopChat chat.</p>
         </div>
       </section>
     </div>

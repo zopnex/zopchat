@@ -40,9 +40,12 @@ service cloud.firestore {
           request.resource.data.text.size() > 0
           || (request.resource.data.imageURL is string && request.resource.data.imageURL.size() > 0)
           || (request.resource.data.audioURL is string && request.resource.data.audioURL.size() > 0)
+          || (request.resource.data.overlayText is string && request.resource.data.overlayText.size() > 0)
+          || (request.resource.data.drawText is string && request.resource.data.drawText.size() > 0)
         );
       allow delete: if signedIn() && resource.data.uid == request.auth.uid;
-      allow update: if false;
+      allow update: if signedIn()
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(["seenBy"]);
     }
 
     // V1 demo rules. Production should reserve mobileNumbers writes for Cloud Functions

@@ -1551,12 +1551,14 @@ input:focus {
 }
 
 .qr-modal-tabs {
+  position: relative;
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 6px;
   padding: 4px;
   border-radius: 999px;
   background: var(--panel-soft);
+  overflow: hidden;
 }
 
 .qr-modal-tabs button {
@@ -1570,6 +1572,41 @@ input:focus {
   background: white;
   color: var(--accent-dark);
   box-shadow: 0 5px 16px rgba(16, 32, 28, 0.08);
+}
+
+.qr-swipe-hint {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-align: center;
+}
+
+.qr-pane-slider {
+  overflow: hidden;
+  touch-action: pan-y;
+}
+
+.qr-pane-track {
+  --swipe-offset: 0px;
+  display: grid;
+  grid-template-columns: 100% 100%;
+  transform: translateX(var(--swipe-offset));
+  transition: transform 180ms ease;
+}
+
+.qr-pane-track.show-my {
+  transform: translateX(calc(-100% + var(--swipe-offset)));
+}
+
+.qr-pane-track.dragging {
+  transition: none;
+}
+
+.qr-pane {
+  min-width: 0;
+  display: grid;
+  gap: 14px;
+  padding: 1px;
 }
 
 .qr-scan-actions {
@@ -1595,6 +1632,13 @@ input:focus {
   border-radius: 18px;
   border: 10px solid white;
   box-shadow: 0 12px 28px rgba(16, 32, 28, 0.14);
+}
+
+.qr-card-actions {
+  display: flex;
+  gap: 10px;
+  justify-content: center;
+  flex-wrap: wrap;
 }
 
 #attach-actions {
@@ -2060,8 +2104,108 @@ textarea,
 
 .song-result {
   width: 100%;
-  grid-template-columns: 44px 1fr;
+  grid-template-columns: 44px 1fr auto;
   margin-top: 6px;
+}
+
+.song-result-actions {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.selected-song audio {
+  width: 100%;
+  max-width: 220px;
+  margin-top: 6px;
+}
+
+.status-extra-tools {
+  display: grid;
+  gap: 8px;
+}
+
+.status-preview-panel {
+  display: grid;
+  gap: 10px;
+  padding: 12px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: white;
+}
+
+.status-preview-panel[hidden] {
+  display: none;
+}
+
+.status-preview-stage {
+  position: relative;
+  display: grid;
+  place-items: center;
+  min-height: 220px;
+  overflow: hidden;
+  border-radius: 18px;
+  background: #111;
+  color: white;
+}
+
+.status-preview-stage > img {
+  width: 100%;
+  height: 320px;
+  object-fit: cover;
+}
+
+.status-preview-stage > p,
+.status-viewer-content > p {
+  position: relative;
+  z-index: 2;
+  max-width: 86%;
+  margin: 10px auto;
+  text-align: center;
+}
+
+.status-preview-stage > img + p,
+.status-preview-stage .status-overlay-text,
+.status-viewer-content .status-overlay-text {
+  position: absolute;
+  left: 50%;
+  bottom: 72px;
+  transform: translateX(-50%);
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.42);
+  color: white;
+  font-weight: 700;
+}
+
+.status-draw-text {
+  font-family: "Comic Sans MS", "Trebuchet MS", cursive;
+  font-size: 1.35rem;
+  color: #ffe76a;
+  text-shadow: 0 2px 12px rgba(0, 0, 0, 0.55);
+}
+
+.status-song-card.floating {
+  position: absolute;
+  left: 14px;
+  right: 14px;
+  bottom: 12px;
+  background: rgba(255, 255, 255, 0.92);
+  color: #111;
+}
+
+.status-new-dot {
+  width: 11px;
+  height: 11px;
+  border-radius: 999px;
+  background: var(--accent);
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.14);
+}
+
+.status-seen-count {
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 0.78rem;
 }
 
 .selected-song img,
